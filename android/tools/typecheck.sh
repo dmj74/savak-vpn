@@ -46,6 +46,15 @@ kotlinc_bin -nowarn -include-runtime -d "$OUT/savak-check.jar" \
 JAVA=${JAVA:-java}
 [ -n "${JAVA_HOME:-}" ] && JAVA="$JAVA_HOME/bin/java"
 
+# Leg 1 needs no JVM at all, and it runs first because a missing resource is the cheapest
+# thing on this list to fix.
+if command -v python3 >/dev/null 2>&1; then
+  echo "── 1/3  resource / manifest / gradle cross-check ──"
+  python3 "$TOOLS/res-check.py"
+else
+  echo "── 1/3  resource cross-check skipped (no python3) ──"
+fi
+
 echo "── 2/3  scoring parity (device port vs engine) ──"
 "$JAVA" -cp "$OUT/savak-check.jar" ir.savak.client.tools.ParityMainKt "$FIXTURE"
 

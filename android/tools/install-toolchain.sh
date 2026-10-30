@@ -46,7 +46,15 @@ check_tools() {
   JAVA_BIN=${JAVA_HOME:+$JAVA_HOME/bin/java}
   [ -n "${JAVA_BIN:-}" ] && [ -x "$JAVA_BIN" ] || JAVA_BIN=$(command -v java || true)
   if [ -n "${JAVA_BIN:-}" ]; then
-    v=$("$JAVA_BIN" -version 2>&1 | head -1 | sed -n 's/.*"\([0-9]*\).*/\1/p')
+    # Parse the quoted version token by hand: `openjdk version "25.0.2" …` and the old
+    # `java version "1.8.0_382"` both have to yield a major number, and a greedy sed regex
+    # silently returned nothing here once — which read as "java missing" on a good JDK.
+    local line ver v
+    line=$("$JAVA_BIN" -version 2>&1 | head -1)
+    ver=${line#*\"}; ver=${ver%%\"*}
+    v=${ver%%.*}
+    if [ "$v" = 1 ]; then ver=${ver#1.}; v=${ver%%.*}; fi
+    case "$v" in ''|*[!0-9]*) v=0;; esac
     if [ "${v:-0}" -ge "$MINIMUM_JDK" ]; then good "JDK $v ($JAVA_BIN)"; else bad "جاوا $v است، به ≥ $MINIMUM_JDK نیاز است (AGP 8.5)"; miss+=("jdk$MINIMUM_JDK"); fi
     # javac, not just java: AGP compiles generated Java (BuildConfig, aidl stubs).
     if [ -x "${JAVA_BIN%java}javac" ]; then good "javac هست"; else bad "javac نیست — این JRE است، JDK نه. بیلد ممکن نیست."; miss+=("javac"); fi

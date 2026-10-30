@@ -14,13 +14,13 @@ https://doo.st/1406
 |---|---|---|
 | سورس کامل (موتور + اپ + گره + مستند) | https://github.com/dmj74/savak-vpn/archive/refs/tags/v0.2.0-engine.tar.gz | ✅ آماده |
 | Release صفحهٔ گیت‌هاب (دارای APK) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ ساخته شد — APK به آن می‌چسبد |
-| **APK دیباگ** | همان صفحهٔ release، بعد از اولین اجرای موفق Actions | ⚙️ `[Actions → build → apk]` |
+| **APK دیباگ** | بعد از فعال کردن workflow: `cp ci/android-apk.yml .github/workflows/` (یک‌بار) | ⚙️ نیازمند ۱ خط از شما |
 | `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود (کلیدهای شما داخلش است) |
 
 چرا APK را همین‌جا نساختیم: بیلد اندروید به Android SDK + JDK 17 + Go (برای AARِ `libbox`)
 نیاز دارد و در محیط توسعه‌ای که این کد در آن نوشته شد هیچ‌کدام نبود — `dl.google.com` و
 Maven Central هم از آن شبکه قابل دسترس نبودند (چک شد: هر دو `000`). برای همین
-`.github/workflows/android-apk.yml` اضافه شده: همان سه ابزار را روی Runner نصب می‌کند،
+``ci/android-apk.yml` (برای فعال‌سازی: `cp ci/android-apk.yml .github/workflows/`)` اضافه شده: همان سه ابزار را روی Runner نصب می‌کند،
 AAR را از تگِ pinned شدهٔ `v1.14.4` می‌سازد، تست‌های هم‌ارزی Kotlin را اجرا می‌کند و APK را
 به release می‌چسباند. تا آن Workflow سبز شود، «دانلود اپ» یعنی بیلد محلی:
 

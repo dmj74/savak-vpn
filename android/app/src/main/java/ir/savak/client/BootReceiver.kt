@@ -34,7 +34,14 @@ class BootReceiver : BroadcastReceiver() {
             val cold = coldStartRung(node.rungs, prefs.getString("mode", "auto") ?: "auto")
                 ?: return
             BundleHolder.stage(node.rungs)
-            context.startService(Intent(context, SavakVpnService::class.java).setAction(SavakVpnService.ACTION_START))
+            // `startService` from a boot receiver is the classic Oreo+ crash (the app is in
+            // the background, so the system throws instead of starting it) — and a tunnel that
+            // is supposed to survive a reboot must become a foreground service the moment it
+            // starts. startForegroundService is the documented pattern for this broadcast; the
+            // service promotes itself before the 5 s window closes.
+            context.startForegroundService(
+                Intent(context, SavakVpnService::class.java).setAction(SavakVpnService.ACTION_START),
+            )
         } finally {
             pending.finish()
         }

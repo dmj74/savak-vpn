@@ -46,10 +46,10 @@ kotlinc_bin -nowarn -include-runtime -d "$OUT/savak-check.jar" \
 JAVA=${JAVA:-java}
 [ -n "${JAVA_HOME:-}" ] && JAVA="$JAVA_HOME/bin/java"
 
-echo "── 1/2  scoring parity (device port vs engine) ──"
+echo "── 2/3  scoring parity (device port vs engine) ──"
 "$JAVA" -cp "$OUT/savak-check.jar" ir.savak.client.tools.ParityMainKt "$FIXTURE"
 
-echo "── 2/2  profile trust (canonical JSON + Ed25519 vs engine) ──"
+echo "── 3/3  profile trust (canonical JSON + Ed25519 vs engine) ──"
 ENGINE=${ENGINE:-$(cd "$MOD/../engine" && pwd)}
 PROFILES=${PROFILE_DIR:-$OUT/init}
 if command -v node >/dev/null 2>&1 && [ -f "$ENGINE/src/cli.js" ]; then

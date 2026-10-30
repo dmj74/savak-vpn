@@ -25,7 +25,7 @@ android {
         minSdk = 26          // API 26: VpnService.Builder.setBlocking + Java 8 time
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1-engine"
+        versionName = "0.2.0-engine"
         ndk {
             // The libbox AAR is a gomobile artifact: it carries cgo .so files for these ABIs.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -101,14 +101,17 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06") // prefs at rest
+    // No lifecycle-runtime-compose and no androidx.security:security-crypto here, on purpose:
+    // nothing imported them (verified by tools/res-check.py). The only persisted state is the
+    // `auto_start` flag and the chosen mode — a keystore for that is theatre — and every unused
+    // artifact is APK size, a CVE surface, and another thing the network must serve during the
+    // build. Add them with a call site, not as scaffolding.
 
     // gomobile binding for sing-box 1.14.4 — built locally, see android/README.md.
     implementation("org.savak.core:libbox:1.14.4")

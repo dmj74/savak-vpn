@@ -39,3 +39,24 @@ pushی که فایل workflow را بسازد یا عوض کند را بدون �
 بیلد امضاشدهٔ release عمداً opt-in است: تا وقتی repo variable‏ `HAVE_SIGNING_KEY=true` نشود،
 آن step اجرا نمی‌شود — یک fork بدون keystore نباید فقط به‌خاطر آن قرمز شود، و مخزن عمومی
 نباید هیچ کلید امضایی ببیند.
+
+## پیش‌پیمایشِ خودِ workflow (امشب، بدون Runner)
+
+هر چهار job روی فایل‌های واقعی همین مخزن اجرا شد و این‌ها گرفته شد — همه‌شان نوعِ خطایی است
+که «اولین اجرای CI» را قرمز می‌کند و به‌راحتی از دید در می‌رود:
+
+- یک `env:` تکراری در step بیلد امضاشده — کلید دوبل در یک mapping یعنی **کل فایل workflow
+  پارس نمی‌شود** و حتی `apk` هم اجرا نمی‌شد. ادغام شد.
+- `android-actions/setup-android` در job `apk` بدون `packages:` — AGP پلتفرم را خودش دانلود
+  نمی‌کند، فقط `Failed to find target with hash string` می‌دهد. `platforms;android-35` و
+  `build-tools;35.0.0` اضافه شد.
+- `gradle` روی PATH تصویر Runner با نسخه‌ای است که تصویر دوست داشته؛ AGP 8.5.2 به Gradle ≥ 8.7
+  نیاز دارد، پس `gradle-version: '8.10'` صریح شد.
+- `upload-artifact` با `path` مطلق بیرون از workspace: شکل درخت artifact تعیین‌نداشته‌شدنی
+  می‌داد (محل AAR یک دایرکتوری عمیق‌تر می‌شد). `root:` صریح اضافه شد تا `settings.gradle.kts`
+  همان‌جا را ببیند که انتظار دارد.
+- `python3 android/tools/res-check.py` (منطق اندروید، leg ۱ِ `typecheck.sh`) قبل از هر بیلدی
+  گراف `R.*` ↔ `res/` ↔ manifest ↔ وابستگی‌ها را چک می‌کند.
+
+ YAML با یک پارسر «کلید تکراری ممنوع» بررسی شد؛ اما هنوز **هیچ Runner آن را اجرا نکرده** —
+اولین اجرا ممکن است چیزی نشان دهد که اینجا دیده نمی‌شود (Compose، دانلود Maven).

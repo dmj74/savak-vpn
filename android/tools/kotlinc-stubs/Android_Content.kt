@@ -10,6 +10,7 @@ open class Context {
     open fun <T> getSystemService(type: Class<T>): T? = null
     open fun getSharedPreferences(name: String, mode: Int): SharedPreferences = SharedPreferences()
     open fun startService(intent: Intent): ComponentName? = ComponentName()
+    open fun startForegroundService(intent: Intent): ComponentName? = ComponentName()
 
     /** Context.getString(int) and its varargs form — used for the notification labels. */
     open fun getString(resId: Int): String = "res:$resId"

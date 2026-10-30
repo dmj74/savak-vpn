@@ -90,6 +90,13 @@ PEM را بچسبانید، `ProfileVerifier` خودش armor را برمی‌د�
 JAVA_HOME=/path/to/jdk-17 bash android/tools/typecheck.sh
 ```
 
+سه پایه است: (۱) `tools/res-check.py` — گراف ارجاع‌ها بین `R.*`، `res/`، `AndroidManifest.xml`
+و `build.gradle.kts`؛ (۲) هم‌ارزی امتیازدهی با fixture تولیدشده از موتور؛ (۳) تأیید امضای
+پروفایلی که خودِ `savak init` امضا کرده. (۱) سه‌چیز را همین حالا گرفت: دو وابستگی که هیچ
+source‌ای import‌شان نمی‌کرد (`androidx.security:security-crypto` و
+`lifecycle-runtime-compose` — حجم APK + سطح CVE، پس حذف شدند)، و کلاسی که manifest اعلام
+می‌کرد و وجود نداشت (این‌جا نداشت، ولی چک می‌کند).
+
 اگر `kotlinc` روی PATH نباشد، اسکریپت `KOTLIN_COMPILER_JAR` را می‌پذیرد
 (`npm i -g kotlin-compiler` همین jar را می‌دهد). استاب‌های `tools/kotlinc-stubs/` فقط
 داربست‌اند: Gradle آن‌ها را نمی‌بیند، پس هیچ‌وقت نمی‌توانند «سبز شدن» را به جای کد واقعی
@@ -113,5 +120,8 @@ stub بیس۶۴ URL-safe بود؛ `toString` استابِ `JSONObject` به‌ج
 - **پیکربندی WireGuard جداست:** `wg_uot` یک `endpoint` است نه outbound، بنابراین
   برای آن پله یک config کامل عوض می‌شود (با `StartOrReloadService`).
 - **بدون `insecure: true`:** روی گواهی self-signed از SPKI pinning استفاده می‌شود.
+- **شروع روی بوت با `startForegroundService`:** `startService()` از `BootReceiver` روی
+  Android ۸+ استثنا می‌دهد (اپ پس‌زمینه است)؛ تانل باید فوراً foreground شود. درِ اصلی همان
+  «VPN همیشه‌روشن» سیستم است، نه این receiver.
 - **`spoof`/`fragment` سطح بسته:** روی اندروید روت نمی‌خواهیم؛ فقط `record_fragment`
   و `tls: {fragment}` در جایی که DPI واقعاً SNI خام را می‌بیند فعال می‌شود.

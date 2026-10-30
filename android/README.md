@@ -71,6 +71,21 @@ PEM را بچسبانید، `ProfileVerifier` خودش armor را برمی‌د�
 کپی‌پیست بد، خطای بسیار گیج‌کننده‌ای است. فهرست خالی یعنی «همه رد شود» — این پیش‌فرض امن
 است، نه باگ.
 
+## ساخت APK روی دستگاه خودتان (اسکریپتش هست)
+
+اگر شبکه‌تان به `services.gradle.org`، `dl.google.com`، `maven.google.com`، Central و `go.dev`
+می‌رسد، یک اسکریپت همهٔ لازم را می‌گیرد و می‌سازد:
+
+```bash
+bash android/tools/install-toolchain.sh --check   # چه هست / چه نیست / شبکه باز است یا نه
+bash android/tools/install-toolchain.sh           # نصب Gradle 8.10 + SDK 35 + NDK 27 + Go، بعد بیلد
+```
+
+نصب‌ها همگی از آدرس pinned و با بررسی sha256 انجام می‌شود و خروجی‌اش `savak-debug.apk` به‌همراه
+sha256 است. اگر شبکه بسته باشد، اسکریپت **چیزی نصب نمی‌کند و چیزی را «ساخته شد» اعلام
+نمی‌کند** — دقیقاً همان کاری که در یک sandbox بسته باید بکنید. مسیر کانتینر هم هست:
+`bash android/tools/install-toolchain.sh docker`.
+
 ## آنچه تست‌شده و آنچه نشده
 
 | | وضعیت |

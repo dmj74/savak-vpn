@@ -32,6 +32,12 @@ Maven Central هم از آن شبکه مسدود بودند (چک شد: هر د�
 mkdir -p .github/workflows && cp ci/android-apk.yml .github/workflows/ && git push
 ```
 
+و اگر می‌خواهید به‌جای CI روی دستگاه خودتان بسازید، همان «نصب همه‌چیز» اسکریپت است:
+
+```bash
+bash android/tools/install-toolchain.sh --check && bash android/tools/install-toolchain.sh
+```
+
 تا آن workflow سبز شود، «دانلود اپ» یعنی بیلد محلی:
 
 ```bash

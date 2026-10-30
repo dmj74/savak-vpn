@@ -8,30 +8,37 @@ https://doo.st/1406
 
 ---
 
-## نسخهٔ `0.2.0-engine` — چه چیزی قابل دانلود است
+## نسخهٔ `0.2.0-engine` — چه چیزی همین حالا قابل دانلود است
 
 | چیز | لینک | وضعیت |
 |---|---|---|
 | سورس کامل (موتور + اپ + گره + مستند) | https://github.com/dmj74/savak-vpn/archive/refs/tags/v0.2.0-engine.tar.gz | ✅ آماده |
-| Release صفحهٔ گیت‌هاب (دارای APK) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ ساخته شد — APK به آن می‌چسبد |
-| **APK دیباگ** | بعد از فعال کردن workflow: `cp ci/android-apk.yml .github/workflows/` (یک‌بار) | ⚙️ نیازمند ۱ خط از شما |
-| `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود (کلیدهای شما داخلش است) |
+| صفحهٔ Release (توضیح نسخه + فایل‌ها) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ آماده |
+| **APK دیباگ** | بعد از یک‌بار فعال کردن pipeline: `cp ci/android-apk.yml .github/workflows/` | ⚙️ یک خط از شما |
+| `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود — کلیدهای گره داخلش است |
 
-چرا APK را همین‌جا نساختیم: بیلد اندروید به Android SDK + JDK 17 + Go (برای AARِ `libbox`)
-نیاز دارد و در محیط توسعه‌ای که این کد در آن نوشته شد هیچ‌کدام نبود — `dl.google.com` و
-Maven Central هم از آن شبکه قابل دسترس نبودند (چک شد: هر دو `000`). برای همین
-``ci/android-apk.yml` (برای فعال‌سازی: `cp ci/android-apk.yml .github/workflows/`)` اضافه شده: همان سه ابزار را روی Runner نصب می‌کند،
-AAR را از تگِ pinned شدهٔ `v1.14.4` می‌سازد، تست‌های هم‌ارزی Kotlin را اجرا می‌کند و APK را
-به release می‌چسباند. تا آن Workflow سبز شود، «دانلود اپ» یعنی بیلد محلی:
+**چرا APK را نساختیم و تحویل ندادیم؟** بیلد اندروید به Android SDK + JDK 17 + Go (برای AARِ
+`libbox`) نیاز دارد و هیچ‌کدام در محیطی که این کد در آن نوشته شد نبود؛ `dl.google.com` و
+Maven Central هم از آن شبکه مسدود بودند (چک شد: هر دو `000`). وانمود به «ساخته شد» کردن
+بی‌معنی است، پس pipeline بیلد نوشته شد و داخل مخزن است:
+[`ci/android-apk.yml`](ci/android-apk.yml). همان سه ابزار را روی Runner نصب می‌کند، AAR را
+از تگ pinnedِ `v1.14.4` می‌سازد، تست هم‌ارزی Kotlin را اجرا می‌کند، و `savak-debug.apk` را
+به همین release می‌چسباند. فعال‌سازی‌اش را عمداً من انجام ندادم: توکن این نشست permission
+`workflows` ندارد و GitHub هر pushی را که فایل workflow بسازد رد می‌کند — که درست است.
+
+```bash
+mkdir -p .github/workflows && cp ci/android-apk.yml .github/workflows/ && git push
+```
+
+تا آن workflow سبز شود، «دانلود اپ» یعنی بیلد محلی:
 
 ```bash
 bash android/tools/build-libbox.sh        # AAR از سورس sing-box (Go + NDK لازم است)
-cd android && gradle :app:assembleDebug   # یا همان پروژه را در Android Studio باز کنید
+cd android && gradle :app:assembleDebug   # یا پروژه را در Android Studio باز کنید
 ```
 
-لینک `doo.st/1406` همان بیلد قدیمی را نشان می‌دهد. آپلود نسخهٔ جدید روی آن کانال،
-کاری است که فقط خودتان می‌توانید بکنید: لینک کوتاه متعلق به حساب شماست و من نه آن
-حساب را دارم و نه می‌سازم.
+لینک `doo.st/1406` همان بیلد قدیمی را نشان می‌دهد. آپلود نسخهٔ جدید روی آن کانال کاری است
+که فقط خودتان می‌توانید بکنید: لینک کوتاه به حساب شما تعلق دارد و من آن حساب را ندارم.
 
 ---
 

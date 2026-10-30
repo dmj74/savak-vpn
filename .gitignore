@@ -46,7 +46,8 @@ keys.json
 # `savak bundle` output is dropped here for the debug APK; it is derived, not source.
 android/app/src/main/assets/bundle.json
 android/app/src/main/assets/profile.json
-# operator-supplied release signing config
+# operator-supplied release signing config (storeFile/keyAlias) + trust anchors
+server/release-signing.properties
 server/trusted-keys.properties
 # gomobile AAR repo (`libbox-<ver>.aar`) — binary, rebuilt from source
 android/third_party/

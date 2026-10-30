@@ -32,3 +32,22 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# --- engine (Node) ---
+node_modules/
+npm-debug.log*
+engine/out/
+# generated key material — never commit a signing key
+keys.json
+*.key
+*.pem
+
+# --- generated mobile artifacts ---
+# `savak bundle` output is dropped here for the debug APK; it is derived, not source.
+android/app/src/main/assets/bundle.json
+android/app/src/main/assets/profile.json
+# operator-supplied release signing config
+server/trusted-keys.properties
+# gomobile AAR repo (`libbox-<ver>.aar`) — binary, rebuilt from source
+android/third_party/
+.kotlin/

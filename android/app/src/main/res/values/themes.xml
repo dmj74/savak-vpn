@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme.Material3.DayNight needs the material dependency; a plain dark theme keeps
+         the build green if the integrator strips Compose Material3 out. -->
+    <style name="Theme.Savak" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0B0F14</item>
+        <item name="android:navigationBarColor">#0B0F14</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

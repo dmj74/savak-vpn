@@ -2,6 +2,8 @@ name: build
 
 # What this proves, and what it cannot:
 #   • engine  — real: unit tests + schema validation of every generated config.
+#   • kotlin-port — real: the app's scorer compiled with kotlinc and diffed against the
+#               engine on a generated fixture (and a signed profile verified end to end).
 #   • libbox  — real: the Go core compiled for Android and installed as an AAR.
 #   • apk     — assembles the debug APK. Nobody has run it on a phone from CI; treat a
 #               green build as "it compiles", not as "the tunnel works".
@@ -42,6 +44,30 @@ jobs:
           node -e 'const b=require(process.env.RUNNER_TEMP+"/bundle.json");if(!b.ok||!b.nodes[0].allowedRungs.length)process.exit(1);console.log("bundle ok:",b.nodes[0].allowedRungs.length,"rungs")'
       - uses: actions/upload-artifact@v4
         with: { name: engine-configs, path: '${{ runner.temp }}/init/**', if-no-files-found: error }
+
+  # The device's own scorer, checked with no Android SDK at all: kotlinc compiles
+  # engine/ + security/ + service/ against the stubs in android/tools/kotlinc-stubs, then
+  # runs (1) the parity fixture generated from this engine and (2) verification of a profile
+  # the real `savak init` signed. Green here means the phone ranks with the server's model;
+  # it is also 100x cheaper than the libbox job, so a scorer divergence fails fast.
+  kotlin-port:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm', cache-dependency-path: engine/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - name: install (ajv — the CLI that signs the test profile)
+        run: npm ci --prefix engine
+      - name: kotlinc, no Android SDK required
+        run: npm install -g kotlin-compiler@2.4.21
+      - name: compile the module, then parity + profile trust
+        run: |
+          export KOTLIN_COMPILER_JAR="$(npm root -g)/kotlin-compiler/lib/kotlin-compiler.jar"
+          test -f "$KOTLIN_COMPILER_JAR"
+          bash android/tools/typecheck.sh
 
   libbox:
     runs-on: ubuntu-latest

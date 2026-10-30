@@ -13,6 +13,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RUNGS } from '../src/ladder.js';
 import { planForNode } from '../src/index.js';
+import { synthesizeLink } from '../src/probes.js';
 import { exampleProfile } from '../src/profile.js';
 
 const SCENARIOS = [
@@ -62,21 +63,33 @@ for (const sc of SCENARIOS) {
     nodeId: 'fra-1',
     client: { platform: 'android', mtu: sc.link.mtu ?? 1420, capabilities: { graphicalClient: true, packetInjection: false, kernelTls: false } },
     policy: { mode: sc.mode },
-    link: sc.link,
+    // linkSpec, not link: this routes the scenario through synthesizeLink() inside the
+    // engine, so BOTH sides score the identical derived object (jitter, flows, tcpOnly,
+    // mtuCap). Passing `link:` handed the engine the raw scenario while the fixture shipped
+    // a synthesized view — 15 rows disagreed for exactly that reason, and the fixture would
+    // have certified a port that reads a different link than the server does.
+    linkSpec: sc.link,
     samples: sc.samples ?? {},
   });
   const rows = (plan.scoringTrace ?? []).filter((r) => r.inLadder);
-  // The scorer reads a specific field set; emitting exactly that (as the engine saw it,
-  // after synthesizeLink's derivations) means the device test compares like with like.
+  // CRITICAL: this must be the object the scorer actually received — plan.link, after the
+  // engine's own synthesis. Rebuilding it here would hide a divergence in the derivation
+  // itself (which fields get filled, which stay undefined).
+  const scored = plan.link;
   const view = {};
-  for (const k of ['access', 'rttMs', 'jitterMs', 'lossPct', 'downMbps', 'upMbps', 'mtuCap', 'udpBlocked', 'quicBlocked', 'sniFiltered', 'quicFingerprinted', 'portThrottled', 'portBlocked', 'udpThrottled', 'bandwidthShaped', 'sizeHeuristic', 'activeProbeSuspected', 'ipRangeBlocked', 'tcpOnly', 'bothRadios', 'source']) {
-    if (plan.link?.[k] !== undefined && plan.link[k] !== null) view[k] = plan.link[k];
+  for (const k of ['access', 'rttMs', 'jitterMs', 'lossPct', 'downMbps', 'upMbps', 'flows', 'mtu', 'mtuCap', 'udpBlocked', 'quicBlocked', 'http2Killed', 'wgSignatureBlocked', 'ssSaltBlocked', 'quicRateLimited', 'sniFiltered', 'quicFingerprinted', 'portThrottled', 'portBlocked', 'udpThrottled', 'bandwidthShaped', 'sizeHeuristic', 'activeProbeSuspected', 'ipRangeBlocked', 'tcpOnly', 'pmtuDrops', 'ipv6Flaky', 'tlsEoT', 'source']) {
+    if (scored[k] !== undefined) view[k] = scored[k];
   }
+  // The capability-side gates come from the plan itself (plan.capabilityGate) — the exact
+  // map the bundle ships to phones. Recomputing them here would let the fixture and the
+  // bundle disagree, which is the very failure this file exists to prevent.
+  const nodeGate = plan.capabilityGate ?? {};
   scenarios.push({
     name: sc.name,
     mode: sc.mode,
     requested: { ...sc.link },
     link: view,
+    nodeGate,
     samples: sc.samples ?? {},
     expected: rows.map((r) => ({
       rungId: r.rungId,

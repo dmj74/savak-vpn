@@ -16,8 +16,23 @@
    "link": {
     "access": "wifi",
     "rttMs": 12,
+    "jitterMs": 3,
     "lossPct": 0,
-    "downMbps": 300
+    "downMbps": 300,
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
+    "udpThrottled": false,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -199,9 +214,23 @@
    "link": {
     "access": "cellular",
     "rttMs": 68,
+    "jitterMs": 14,
     "lossPct": 4,
     "downMbps": 40,
-    "upMbps": 8
+    "upMbps": 8,
+    "flows": 64,
+    "mtu": 1420,
+    "mtuCap": 1400,
+    "udpThrottled": false,
+    "pmtuDrops": true,
+    "ipv6Flaky": true,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {
     "hy2_brutal": {
@@ -390,53 +419,34 @@
    "link": {
     "access": "wifi",
     "rttMs": 30,
+    "jitterMs": 3,
     "lossPct": 0,
     "downMbps": 120,
-    "udpBlocked": true
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
+    "udpBlocked": true,
+    "quicBlocked": true,
+    "udpThrottled": false,
+    "tcpOnly": true,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
     {
-     "rungId": "wg_uot",
-     "feasible": false,
-     "reason": "UDP is blocked on this path",
-     "score": 0.897997,
-     "inputs": {
-      "evasionApplied": 0,
-      "canHop": false,
-      "naiveQuic": false
-     },
-     "parts": {
-      "throughput": 1,
-      "latency": 0.716531,
-      "stability": 1,
-      "evasion": 0.383333,
-      "cost": 0.8955
-     }
-    },
-    {
-     "rungId": "vless_reality_tcp",
-     "feasible": true,
-     "reason": "",
-     "score": 0.894013,
-     "inputs": {
-      "evasionApplied": 0,
-      "canHop": false,
-      "naiveQuic": false
-     },
-     "parts": {
-      "throughput": 0.955,
-      "latency": 0.606531,
-      "stability": 1,
-      "evasion": 0.976667,
-      "cost": 0.7655
-     }
-    },
-    {
      "rungId": "ss2022",
      "feasible": true,
      "reason": "",
-     "score": 0.892207,
+     "score": 0.93754,
      "inputs": {
       "evasionApplied": 0,
       "canHop": false,
@@ -446,51 +456,51 @@
       "throughput": 0.985,
       "latency": 0.716531,
       "stability": 1,
-      "evasion": 0.433333,
+      "evasion": 1,
       "cost": 0.8735
      }
     },
     {
-     "rungId": "tuic_v5",
+     "rungId": "wg_uot",
      "feasible": false,
      "reason": "UDP is blocked on this path",
-     "score": 0.830987,
+     "score": 0.90733,
      "inputs": {
       "evasionApplied": 0,
       "canHop": false,
       "naiveQuic": false
      },
      "parts": {
-      "throughput": 0.9,
+      "throughput": 1,
       "latency": 0.716531,
       "stability": 1,
-      "evasion": 0.533333,
-      "cost": 0.5525
+      "evasion": 0.5,
+      "cost": 0.8955
      }
     },
     {
-     "rungId": "hy2_brutal",
-     "feasible": false,
-     "reason": "UDP is blocked on this path",
-     "score": 0.807313,
+     "rungId": "vless_reality_tcp",
+     "feasible": true,
+     "reason": "",
+     "score": 0.89588,
      "inputs": {
       "evasionApplied": 0,
       "canHop": false,
       "naiveQuic": false
      },
      "parts": {
-      "throughput": 0.88,
+      "throughput": 0.955,
       "latency": 0.606531,
       "stability": 1,
-      "evasion": 0.666667,
-      "cost": 0.4705
+      "evasion": 1,
+      "cost": 0.7655
      }
     },
     {
      "rungId": "naive_h3",
      "feasible": true,
      "reason": "",
-     "score": 0.80649,
+     "score": 0.82249,
      "inputs": {
       "evasionApplied": 0,
       "canHop": false,
@@ -500,15 +510,51 @@
       "throughput": 0.86,
       "latency": 0.606531,
       "stability": 1,
-      "evasion": 0.8,
+      "evasion": 1,
       "cost": 0.4635
+     }
+    },
+    {
+     "rungId": "tuic_v5",
+     "feasible": false,
+     "reason": "UDP is blocked on this path",
+     "score": 0.80832,
+     "inputs": {
+      "evasionApplied": 0,
+      "canHop": false,
+      "naiveQuic": false
+     },
+     "parts": {
+      "throughput": 0.9,
+      "latency": 0.716531,
+      "stability": 1,
+      "evasion": 0.25,
+      "cost": 0.5525
+     }
+    },
+    {
+     "rungId": "hy2_brutal",
+     "feasible": false,
+     "reason": "UDP is blocked on this path",
+     "score": 0.78598,
+     "inputs": {
+      "evasionApplied": 0,
+      "canHop": false,
+      "naiveQuic": false
+     },
+     "parts": {
+      "throughput": 0.88,
+      "latency": 0.606531,
+      "stability": 1,
+      "evasion": 0.4,
+      "cost": 0.4705
      }
     },
     {
      "rungId": "anytls",
      "feasible": true,
      "reason": "",
-     "score": 0.723393,
+     "score": 0.74206,
      "inputs": {
       "evasionApplied": 0,
       "canHop": false,
@@ -518,7 +564,7 @@
       "throughput": 0.72,
       "latency": 0.606531,
       "stability": 1,
-      "evasion": 0.766667,
+      "evasion": 1,
       "cost": 0.4145
      }
     }
@@ -539,10 +585,25 @@
    "link": {
     "access": "cellular",
     "rttMs": 90,
+    "jitterMs": 14,
     "lossPct": 1.5,
     "downMbps": 25,
+    "upMbps": 8,
+    "flows": 64,
+    "mtu": 1400,
+    "mtuCap": 1400,
     "quicBlocked": true,
-    "sniFiltered": true
+    "sniFiltered": true,
+    "udpThrottled": false,
+    "pmtuDrops": true,
+    "ipv6Flaky": true,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -670,9 +731,23 @@
    "link": {
     "access": "wifi",
     "rttMs": 22,
+    "jitterMs": 3,
     "lossPct": 9,
     "downMbps": 60,
-    "udpThrottled": true
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
+    "udpThrottled": true,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -854,9 +929,24 @@
    "link": {
     "access": "wifi",
     "rttMs": 22,
+    "jitterMs": 3,
     "lossPct": 9,
     "downMbps": 60,
-    "portThrottled": true
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
+    "portThrottled": true,
+    "udpThrottled": false,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -1039,10 +1129,25 @@
    "link": {
     "access": "cellular",
     "rttMs": 120,
+    "jitterMs": 14,
     "lossPct": 2,
     "downMbps": 15,
+    "upMbps": 8,
+    "flows": 64,
+    "mtu": 1400,
+    "mtuCap": 1400,
+    "udpThrottled": false,
     "bandwidthShaped": true,
-    "sizeHeuristic": true
+    "sizeHeuristic": true,
+    "pmtuDrops": true,
+    "ipv6Flaky": true,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -1187,8 +1292,23 @@
    "link": {
     "access": "wifi",
     "rttMs": 8,
+    "jitterMs": 3,
     "lossPct": 0.5,
-    "downMbps": 200
+    "downMbps": 200,
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
+    "udpThrottled": false,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {
     "wg_uot": {
@@ -1306,10 +1426,25 @@
    "link": {
     "access": "wifi",
     "rttMs": 40,
+    "jitterMs": 3,
     "lossPct": 1,
     "downMbps": 50,
+    "upMbps": 60,
+    "flows": 64,
+    "mtu": 1500,
+    "mtuCap": 1500,
     "sniFiltered": true,
-    "activeProbeSuspected": true
+    "udpThrottled": false,
+    "activeProbeSuspected": true,
+    "pmtuDrops": false,
+    "ipv6Flaky": false,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [
@@ -1508,8 +1643,26 @@
    "link": {
     "access": "cellular",
     "rttMs": 55,
+    "jitterMs": 14,
     "lossPct": 3,
-    "downMbps": 12
+    "downMbps": 12,
+    "upMbps": 8,
+    "flows": 64,
+    "mtu": 1180,
+    "mtuCap": 1400,
+    "udpThrottled": false,
+    "pmtuDrops": true,
+    "ipv6Flaky": true,
+    "tlsEoT": true,
+    "source": "synthetic"
+   },
+   "nodeGate": {
+    "hy2_brutal": "needs MTU ≥ 1200, path gives 1180",
+    "tuic_v5": "needs MTU ≥ 1200, path gives 1180",
+    "wg_uot": "needs MTU ≥ 1280, path gives 1180",
+    "vless_ws_cdn": "CDN fronting is not configured",
+    "vmess_ws": "legacy interop is off (enable allowLegacy)",
+    "tor_bridge": "no local Tor binary (opt-in only)"
    },
    "samples": {},
    "expected": [

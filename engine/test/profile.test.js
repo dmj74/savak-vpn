@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createPublicKey } from 'node:crypto';
 import {
   canonicalJson,
   profileId,
@@ -13,6 +14,10 @@ import {
 
 test('canonical JSON is order-independent but content-sensitive', () => {
   assert.equal(canonicalJson({ b: 1, a: [1, { d: 2, c: 3 }] }), canonicalJson({ a: [1, { c: 3, d: 2 }], b: 1 }));
+  // Exact bytes, not just "sorted": the Kotlin verifier on the phone has to agree with this
+  // string one character at a time, and a stray separator space (Kotlin's joinToString
+  // default is ", ") silently rejects every signed profile.
+  assert.equal(canonicalJson({ b: 1, a: [1, { d: 2, c: 3 }] }), '{"a":[1,{"c":3,"d":2}],"b":1}');
   assert.notEqual(canonicalJson({ a: 1 }), canonicalJson({ a: 1, b: undefined, c: null }));
   assert.equal(canonicalJson({ a: 1, c: null }), '{"a":1,"c":null}');
 });

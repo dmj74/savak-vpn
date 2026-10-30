@@ -4,6 +4,7 @@ import { buildBundle } from '../src/bundle.js';
 import { exampleProfile, signProfile, generateSigningKey, verifyProfile } from '../src/profile.js';
 import { validateConfig } from '../src/validate.js';
 import { synthesizeLink } from '../src/probes.js';
+import { planForNode } from '../src/index.js';
 
 test('the bundle carries one pre-validated sing-box config per feasible rung', async () => {
   const bundle = await buildBundle({ profile: exampleProfile(), policy: { mode: 'speed' }, linkSpec: { access: 'cellular', censor: 'sni-only' } });
@@ -74,5 +75,39 @@ test('`only` trims the bundle without breaking the fallback ladder', async () =>
     assert.deepEqual(node.allowedRungs.sort(), ['hy2_brutal', 'vless_reality_tcp'].sort());
     const sel = node.configs.hy2_brutal.outbounds.find((o) => o.type === 'selector');
     assert.equal(sel.outbounds.length, 2, 'the selector should only contain what was requested');
+  }
+});
+
+test('the gates a phone cannot re-derive are shipped to it as data', async () => {
+  // The device deliberately does not re-implement feasibility() — node capability, listener
+  // and fronting verdicts belong to whoever knows the node. So they have to *arrive*:
+  // `plan.capabilityGate` -> `nodes[].scoringInputs.blocked` -> the Kotlin scorer's `gate()`.
+  // If this drifts, the app starts ranking a rung the server cannot serve.
+  const profile = exampleProfile();
+  for (const censor of ['clean', 'udp-block', 'deep-packet']) {
+    const linkSpec = { access: 'wifi', censor };
+    const plan = planForNode({ profile, policy: { mode: 'stealth' }, linkSpec });
+    const bundle = await buildBundle({ profile, policy: { mode: 'stealth' }, linkSpec });
+    assert.equal(bundle.ok, true, bundle.errors.join('\n'));
+    const shipped = bundle.nodes[0].scoringInputs;
+    assert.deepEqual(
+      Object.keys(shipped).sort(),
+      plan.scoringTrace.map((t) => t.rungId).sort(),
+      `${censor}: every rung the engine considered needs an inputs row, or the device re-ranks it blind`,
+    );
+    const blocked = Object.fromEntries(Object.entries(shipped).filter(([, i]) => i.blocked).map(([id, i]) => [id, i.blocked]));
+    assert.deepEqual(blocked, plan.capabilityGate, censor);
+    for (const [rungId, reason] of Object.entries(plan.capabilityGate)) {
+      const trace = plan.scoringTrace.find((t) => t.rungId === rungId);
+      assert.ok(trace, `${censor}/${rungId}: gated rungs still need a trace row, or the fixture loses the verdict`);
+      assert.equal(trace.inputs.blocked, reason, `${censor}/${rungId}`);
+    }
+    if (censor === 'udp-block') {
+      // link-dependent gates stay on the device: UDP death must show up in the ranking even
+      // though it is not in `capabilityGate`.
+      const row = plan.ranking.find((r) => r.rungId === 'hy2_brutal');
+      assert.equal(row.feasible, false, 'QUIC over a dead UDP path cannot be offered');
+      assert.match(row.reason, /UDP/i);
+    }
   }
 });

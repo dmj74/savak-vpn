@@ -16,13 +16,15 @@ https://doo.st/1406
 | صفحهٔ Release (توضیح نسخه + فایل‌ها) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ آماده |
 | **APK دیباگ** | بعد از یک‌بار فعال کردن pipeline: `cp ci/android-apk.yml .github/workflows/` | ⚙️ یک خط از شما |
 | `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود — کلیدهای گره داخلش است |
+| منطق اندروید: کامپایل + هم‌ارزی + امضا (بدون SDK) | `bash android/tools/typecheck.sh` | ✅ همین‌جا اجرا شد — نه فقط نوشته |
 
 **چرا APK را نساختیم و تحویل ندادیم؟** بیلد اندروید به Android SDK + JDK 17 + Go (برای AARِ
 `libbox`) نیاز دارد و هیچ‌کدام در محیطی که این کد در آن نوشته شد نبود؛ `dl.google.com` و
 Maven Central هم از آن شبکه مسدود بودند (چک شد: هر دو `000`). وانمود به «ساخته شد» کردن
 بی‌معنی است، پس pipeline بیلد نوشته شد و داخل مخزن است:
-[`ci/android-apk.yml`](ci/android-apk.yml). همان سه ابزار را روی Runner نصب می‌کند، AAR را
-از تگ pinnedِ `v1.14.4` می‌سازد، تست هم‌ارزی Kotlin را اجرا می‌کند، و `savak-debug.apk` را
+[`ci/android-apk.yml`](ci/android-apk.yml). چهار job دارد: `engine` (تست‌های موتور + schema)،
+`kotlin-port` (کامپایل منطق اپ با kotlinc و سنجش هم‌ارزی و امضا — بدون Android SDK)،
+`libbox` (ساخت AAR از تگ pinnedِ `v1.14.4`)، و `apk` که `savak-debug.apk` را می‌سازد و
 به همین release می‌چسباند. فعال‌سازی‌اش را عمداً من انجام ندادم: توکن این نشست permission
 `workflows` ندارد و GitHub هر pushی را که فایل workflow بسازد رد می‌کند — که درست است.
 
@@ -120,8 +122,13 @@ sudo bash server/bootstrap.sh --hostname fra1.example.com --node fra-1 --apply
 - موتور config می‌سازد و انتخاب می‌کند؛ **data plane خودِ sing-box است**. پس نسخهٔ sing-box
   باید 1.14.x باشد (1.11+ برای `endpoints`، 1.12+ برای حذف GeoIP، 1.13+ برای `sniff` به‌عنوان
   rule action، 1.14.4 برای Chrome parrot/gecko).
-- `android/` **منبع است، APK نه**: در این محیط Android SDK و toolchain گو در دسترس نبود.
-  بیلد و رفتار روی دستگاه را خودتان بسنجید (`android/README.md`).
+- `android/` **منطقش اجرا شده، APK آن نه**: در این محیط Android SDK و toolchain گو نبود،
+  ولی `kotlinc` روی JVM اجرا شد و نتیجه روشن است: ۹ فایل ماژول کامپایل می‌شوند، ۸۰ ردیف
+  رتبه‌بندیِ اپ بیت‌به‌بیت با اعداد موتور می‌خواند، و امضای یک پروفایل واقعیِ `savak init`
+  با canonical JSON خودِ اپ تأیید می‌شود (و سه حالت دست‌کاری/کلید ناشناخته/بدون کلید رد).
+  این تست‌ها «نوشته» نشده‌اند — خروجی‌شان در `android/README.md` است. رابط Compose
+  (`MainActivity.kt`) و مرز `libbox` تنها بخش‌هایی هستند که Gradle/CI باید بسنجد؛ رفتار روی
+  دستگاه را هم خودتان (`android/README.md`).
 - ECH و `spoof` (نیازمند روت) عمداً پیاده نشده‌اند؛ `docs/smart-evasion.md` توضیح می‌دهد چرا.
 - Tor فقط به‌عنوان طبقهٔ آخر در جدول است؛ config آن نیاز به bridge زنده دارد که این موتور
   برای شما نمی‌سازد.

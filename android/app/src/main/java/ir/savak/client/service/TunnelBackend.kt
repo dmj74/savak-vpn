@@ -18,10 +18,10 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 interface TunnelBackend {
-    suspend fun start(config: File, tunMtu: Int): Result
-    suspend fun reload(config: File): Result
-    suspend fun stop()
-    suspend fun setSelectorDefault(selectorTag: String, outboundTag: String): Result
+    fun start(config: File, tunMtu: Int): Result
+    fun reload(config: File): Result
+    fun stop()
+    fun setSelectorDefault(selectorTag: String, outboundTag: String): Result
     fun describe(): String
 
     data class Result(val ok: Boolean, val message: String? = null, val pid: Int? = null)
@@ -40,7 +40,7 @@ interface TunnelBackend {
  */
 class LibBoxBackend(private val context: Context) : TunnelBackend {
 
-    override suspend fun start(config: File, tunMtu: Int): TunnelBackend.Result {
+    override fun start(config: File, tunMtu: Int): TunnelBackend.Result {
         val text = config.readText()
         // Cheap pre-flight: libbox will refuse this config otherwise, mid-connect.
         val checked = runCatching { LibBoxReflect.checkConfig(text) }
@@ -52,13 +52,13 @@ class LibBoxBackend(private val context: Context) : TunnelBackend {
         }.getOrElse { TunnelBackend.Result(false, it.message) }
     }
 
-    override suspend fun reload(config: File) = start(config, 0)
+    override fun reload(config: File) = start(config, 0)
 
-    override suspend fun stop() {
+    override fun stop() {
         runCatching { LibBoxReflect.stopService() }
     }
 
-    override suspend fun setSelectorDefault(selectorTag: String, outboundTag: String) =
+    override fun setSelectorDefault(selectorTag: String, outboundTag: String) =
         runCatching { LibBoxReflect.putProxy(selectorTag, outboundTag) }
             .fold({ TunnelBackend.Result(true) }, { TunnelBackend.Result(false, it.message) })
 
@@ -126,11 +126,14 @@ object LibBoxReflect {
  *   sing-box check -C dir && sing-box run -C dir
  * and switches rungs through the Clash-compatible control API, which the engine
  * enables by putting `experimental.clash_api` into the config when asked.
+ *
+ * Nothing here is `suspend`: every caller already runs on a dedicated thread, and a fake
+ * coroutine boundary would only make the module require a dependency it does not use.
  */
 class SubprocessBackend(private val workDir: File, private val binary: String = "sing-box") : TunnelBackend {
     private var process: Process? = null
 
-    override suspend fun start(config: File, tunMtu: Int): TunnelBackend.Result {
+    override fun start(config: File, tunMtu: Int): TunnelBackend.Result {
         val check = exec(listOf(binary, "check", "-D", workDir.absolutePath, "-c", config.absolutePath), 20)
         if (check.code != 0) return TunnelBackend.Result(false, "sing-box check failed: ${check.out.take(800)}")
         val p = ProcessBuilder(binary, "run", "-D", workDir.absolutePath, "-c", config.absolutePath)
@@ -138,27 +141,29 @@ class SubprocessBackend(private val workDir: File, private val binary: String = 
             .directory(workDir)
             .start()
         process = p
-        // A fast death usually means a capability/permission problem, not a config one.
-        val early = withTimeout(1500) { p.waitFor(1500, TimeUnit.MILLISECONDS) && p.exitValue() != 0 }
-        return if (early) TunnelBackend.Result(false, "sing-box exited immediately", p.pid().toInt())
+        // A fast death means a capability/permission problem, not a config one — and it is
+        // the *only* failure mode a subprocess backend has, so spend 1.5s looking for it.
+        val died = p.waitFor(1500, TimeUnit.MILLISECONDS) && p.exitValue() != 0
+        return if (died) TunnelBackend.Result(false, "sing-box exited immediately: ${lastOutput(p)}", p.pid().toInt())
         else TunnelBackend.Result(true, "running", p.pid().toInt())
     }
 
-    override suspend fun reload(config: File): TunnelBackend.Result {
+    override fun reload(config: File): TunnelBackend.Result {
         val check = exec(listOf(binary, "check", "-D", workDir.absolutePath, "-c", config.absolutePath), 20)
         if (check.code != 0) return TunnelBackend.Result(false, "refusing to reload an invalid config: ${check.out.take(600)}")
-        // sing-box SIGHUP reloads the config without dropping the tunnel.
-        process?.outputStream?.use { it.write("\n".toByteArray()) }
-        exec(listOf("kill", "-HUP", process?.pid()?.toString() ?: return TunnelBackend.Result(false, "not running")), 5)
+        // SIGHUP makes sing-box re-read the file without dropping the tunnel. (Writing to
+        // the process' stdin would do nothing at all — it has no console.)
+        val pid = process?.pid() ?: return TunnelBackend.Result(false, "not running")
+        exec(listOf("kill", "-HUP", pid.toString()), 5)
         return TunnelBackend.Result(true, "reloaded")
     }
 
-    override suspend fun stop() {
+    override fun stop() {
         process?.destroy()
         process = null
     }
 
-    override suspend fun setSelectorDefault(selectorTag: String, outboundTag: String): TunnelBackend.Result {
+    override fun setSelectorDefault(selectorTag: String, outboundTag: String): TunnelBackend.Result {
         val port = readPort() ?: return TunnelBackend.Result(false, "clash_api not enabled in this config")
         return runCatching {
             val conn = (java.net.URL("http://127.0.0.1:$port/proxies/$selectorTag").openConnection() as java.net.HttpURLConnection)
@@ -173,7 +178,12 @@ class SubprocessBackend(private val workDir: File, private val binary: String = 
 
     override fun describe() = "sing-box subprocess ($binary)"
 
-    private suspend fun readPort(): Int? = File(workDir, ".savak-api-port").takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()
+    private fun readPort(): Int? = File(workDir, ".savak-api-port").takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()
+
+    /** Why a process died at once is almost always in its stderr — surface it, don't guess. */
+    private fun lastOutput(p: Process): String = runCatching {
+        String(p.errorStream.readBytes(), Charsets.UTF_8).take(400)
+    }.getOrDefault("")
 
     private data class Exec(val code: Int, val out: String)
 
@@ -183,7 +193,4 @@ class SubprocessBackend(private val workDir: File, private val binary: String = 
         p.waitFor(timeoutSec, TimeUnit.SECONDS)
         return Exec(if (p.isAlive) { p.destroy(); -1 } else p.exitValue(), out)
     }
-
-    private suspend fun <T> withTimeout(ms: Long, block: suspend () -> T): T? =
-        kotlinx.coroutines.withTimeoutOrNull(ms) { block() }
 }

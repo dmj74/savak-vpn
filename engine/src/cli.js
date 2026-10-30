@@ -325,7 +325,9 @@ async function main() {
           (v.ok ? '' : v.errors.slice(0, 6).map((e) => `    ${e}\n`).join('')) +
           `  keys.json      KEEP THIS FILE SECRET (profile signing key + all node credentials)\n\n` +
           `next: node src/cli.js bundle --profile ${outDir}/profile.json --node ${res.profile.servers[0].id} --out ${outDir}/bundle.json\n` +
-          `      ship bundle.json to the phones; trust the key: "${res.signingKey.keyId}"\n`,
+          `      ship bundle.json to the phones; trust the key: "${res.signingKey.keyId}"\n` +
+          `      app trust anchor for android/…/MainActivity.kt → TrustedKeys.map:\n` +
+          `        \"${res.signingKey.keyId}\" to \"${res.signingKey.publicKeyB64}\"\n`,
       );
       if (!v.ok) process.exitCode = 4;
       break;

@@ -79,7 +79,7 @@ internal fun scoreParts(spec: RungSpec, sample: Sample?, link: LinkSnapshot, tun
     if (link.sizeHeuristic == true) observed.add(a.shaping)
     if (link.activeProbeSuspected == true) observed.add(a.activeProbe)
     if (link.portThrottled == true || link.portBlocked == true) observed.add(a.udpQos)
-    if (link.tcpOnly) observed.add(a.tcpOnly)
+    if (link.tcpOnly == true) observed.add(a.tcpOnly)
     if (link.ipRangeBlocked == true) observed.add(a.ipBlocked)
     if (link.bandwidthShaped == true) observed.add(a.shaping)
     val evasionBase = if (observed.isEmpty()) clamp((a.dpiSni + a.dpiQuic + a.activeProbe) / 3.0) else observed.average()
@@ -106,19 +106,37 @@ data class Ranked(
 class Gate(val ok: Boolean, val reason: String, val evasionApplied: Double = 0.0)
 
 /**
- * The hard gates, before any scoring: things that cannot work are not scored at all.
- * `evasionApplied` is taken from the bundle rather than re-derived, because the inputs that
- * produced it (the server's hop pool, the naive-H3 verdict) are only visible at build time.
+ * The hard gates, before any scoring. The reason strings and their order mirror
+ * `feasibility()` in engine/src/score.js verbatim — including which check wins when two
+ * apply, because a *different reason for the same verdict* is enough to make the parity
+ * check lie about the port.
+ *
+ * `blocked` is the capability-side verdict the bundle shipped (no TLS listener, no CDN
+ * fronting, legacy interop off): the device cannot re-derive those, so it must not guess.
  */
-internal fun gate(spec: RungSpec, link: LinkSnapshot, mtu: Int, allowed: Set<String>, hopRanges: Int = 0, evasionApplied: Double = -1.0): Gate {
-    if (spec.id !in allowed) return Gate(false, "excluded by policy mode")
-    if (spec.requiresUdp && link.udpBlocked == true) return Gate(false, "UDP is blocked on this path")
-    if (spec.requiresQuic && link.quicBlocked == true) return Gate(false, "QUIC is being dropped")
-    if ((spec.minMtu ?: 0) > 0 && mtu > 0 && mtu < spec.minMtu) return Gate(false, "needs MTU ≥ ${spec.minMtu}, path gives $mtu")
-    if (spec.requiresQuic && link.udpThrottled == true && hopRanges == 0 && link.portBlocked == true) {
-        return Gate(false, "QUIC on a single throttled port with no hop pool")
+internal fun gate(
+    spec: RungSpec,
+    link: LinkSnapshot,
+    mtu: Int,
+    mode: String,
+    advertised: Boolean,
+    blocked: String?,
+    evasionApplied: Double = -1.0,
+): Gate {
+    fun reject(why: String) = Gate(false, why)
+    if (!advertised) return reject("node does not advertise ${'$'}{spec.id}")
+    if (spec.requiresUdp && link.udpBlocked == true) return reject("UDP is blocked on this path")
+    if (spec.requiresQuic && link.quicBlocked == true) return reject("QUIC/UDP-443 is being dropped")
+    if (spec.id == "vless_ws_cdn" && link.http2Killed == true) return reject("HTTP/2 transports are being reset")
+    if (blocked != null) return reject(blocked)
+    val floor = spec.minMtu ?: 0
+    if (floor > 0 && mtu > 0 && mtu < floor) return reject("needs MTU ≥ ${'$'}floor, path gives ${'$'}mtu")
+    if (spec.id == "wg_uot" && link.wgSignatureBlocked == true) return reject("WireGuard packet pattern is being dropped")
+    if (spec.id == "ss2022" && link.ssSaltBlocked == true) return reject("AEAD salt length is being matched")
+    if (spec.family == Family.QUIC && link.quicRateLimited == true && mode == "game") {
+        return reject("QUIC is being rate-limited; latency goals unreachable here")
     }
-    val applied = if (evasionApplied >= 0.0) evasionApplied else if (hopRanges > 1) 0.12 else 0.0
+    val applied = if (evasionApplied >= 0.0) evasionApplied else 0.0
     return Gate(true, "", applied)
 }
 
@@ -130,6 +148,7 @@ class LadderScore(
     private val tunings: Map<String, Tuning> = emptyMap(),
     private val hopRanges: Map<String, Int> = emptyMap(),
     private val evasionApplied: Map<String, Double> = emptyMap(),
+    private val capabilityBlocked: Map<String, String> = emptyMap(),
 ) {
     private val weights = LadderTable.WEIGHTS[mode] ?: LadderTable.WEIGHTS.getValue("auto")
     private val allow = LadderTable.MODE_ALLOW[mode] ?: LadderTable.MODE_ALLOW.getValue("auto")
@@ -137,9 +156,16 @@ class LadderScore(
     fun rank(samples: Map<String, Sample>, history: Map<String, Double> = emptyMap()): List<Ranked> {
         val totalPulls = samples.values.sumOf { it.attempts }
         return LadderTable.ALL.map { spec ->
-            val inLadder = spec.id in allow && spec.id in nodeProtocols
-            val g = if (spec.id in nodeProtocols) gate(spec, snapshot, pathMtu, allow, hopRanges[spec.id] ?: 0)
-            else Gate(false, "node does not speak ${spec.id}")
+            val inLadder = spec.id in allow
+            val g = gate(
+                spec = spec,
+                link = snapshot,
+                mtu = pathMtu,
+                mode = mode,
+                advertised = spec.id in nodeProtocols,
+                blocked = capabilityBlocked[spec.id],
+                evasionApplied = evasionApplied[spec.id] ?: -1.0,
+            )
             val sample = samples[spec.id]
             val tuning = tunings[spec.id] ?: Tuning(canHop = (hopRanges[spec.id] ?: 0) > 1)
             val parts = scoreParts(spec, sample, snapshot, tuning, g.evasionApplied)
@@ -150,7 +176,16 @@ class LadderScore(
             val pulls = sample?.attempts ?: 0
             val explore = if (inLadder && g.ok && pulls < 6 && totalPulls > 0) 0.06 * sqrt(ln(totalPulls + 2.0) / (pulls + 1)) else 0.0
             val score = clamp(base + explore - (history[spec.id] ?: 0.0), 0.0, 1.2)
-            Ranked(spec, inLadder, g.ok, g.reason, score, parts, base, explore)
+            Ranked(
+                spec = spec,
+                inLadder = inLadder,
+                feasible = g.ok && inLadder,
+                reason = if (!g.ok) g.reason else if (!inLadder) "excluded by policy mode" else "",
+                score = score,
+                parts = parts,
+                raw = base,
+                explore = explore,
+            )
         }.sortedByDescending { it.score }
     }
 }

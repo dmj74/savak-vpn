@@ -15,58 +15,6 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import kotlin.concurrent.thread
 
-enum class Access { WIFI, CELLULAR, ETHERNET, OTHER, NONE }
-
-data class LinkSnapshot(
-    val access: Access,
-    val rttMs: Double? = null,
-    val jitterMs: Double? = null,
-    val lossPct: Double? = null,
-    val downMbps: Double? = null,
-    val upMbps: Double? = null,
-    val mtuCap: Int? = null,
-    val udpBlocked: Boolean? = null,
-    val quicBlocked: Boolean? = null,
-    val sniFiltered: Boolean? = null,
-    val portThrottled: Boolean? = null,
-    val udpThrottled: Boolean? = null,
-    val portBlocked: Boolean? = null,
-    val quicFingerprinted: Boolean? = null,
-    val bandwidthShaped: Boolean? = null,
-    val sizeHeuristic: Boolean? = null,
-    val activeProbeSuspected: Boolean? = null,
-    val ipRangeBlocked: Boolean? = null,
-    val bothRadios: Boolean = false,
-    val source: String = "measured",
-) {
-    val tcpOnly: Boolean get() = udpBlocked == true
-
-    /** JSON the engine's ranking function understands; `null`s are omitted on purpose. */
-    fun toJson(): org.json.JSONObject {
-        val o = org.json.JSONObject()
-        o.put("source", source)
-        o.put("access", if (access == Access.CELLULAR) "cellular" else "wifi")
-        rttMs?.let { o.put("rttMs", it) }
-        jitterMs?.let { o.put("jitterMs", it) }
-        lossPct?.let { o.put("lossPct", it) }
-        downMbps?.let { o.put("downMbps", it) }
-        upMbps?.let { o.put("upMbps", it) }
-        mtuCap?.let { o.put("mtuCap", it) }
-        udpBlocked?.let { o.put("udpBlocked", it) }
-        quicBlocked?.let { o.put("quicBlocked", it) }
-        sniFiltered?.let { o.put("sniFiltered", it) }
-        portThrottled?.let { o.put("portThrottled", it) }
-        udpThrottled?.let { o.put("udpThrottled", it) }
-        portBlocked?.let { o.put("portBlocked", it) }
-        quicFingerprinted?.let { o.put("quicFingerprinted", it) }
-        bandwidthShaped?.let { o.put("bandwidthShaped", it) }
-        sizeHeuristic?.let { o.put("sizeHeuristic", it) }
-        activeProbeSuspected?.let { o.put("activeProbeSuspected", it) }
-        ipRangeBlocked?.let { o.put("ipRangeBlocked", it) }
-        return o
-    }
-}
-
 class LinkMeasurer(private val context: Context) {
 
     fun access(): Access {
@@ -227,6 +175,10 @@ class LinkMeasurer(private val context: Context) {
             quicBlocked = udp?.blocked,
             udpThrottled = udp?.let { !it.blocked && it.lossPct > 25 },
             portThrottled = udp?.let { !it.blocked && it.lossPct in 8.0..25.0 },
+            // Explicit, not derived inside the model: a scorer that infers "TCP only" from
+            // "UDP blocked" would disagree with a fixture that does not, and both are right
+            // on their own terms. The measurement decides.
+            tcpOnly = udp?.blocked == true,
             bothRadios = bothRadiosUp(),
             source = if (best == null && udp == null) "degraded" else "measured",
         )

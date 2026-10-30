@@ -13,7 +13,7 @@
  * from the ladder; the profile can only choose rungs and fill in endpoints.
  */
 
-import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { createHash, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -38,7 +38,12 @@ export function generateSigningKey() {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
   });
-  return { publicKey, privateKey, keyId: keyIdFromPem(publicKey) };
+  // publicKey stays PEM (what Node's crypto wants); publicKeyB64 is the same key as
+  // compact SPKI DER for the places that cannot read armor — the Android APK's compiled-in
+  // trust anchor, a QR code, a config field. Making each client strip armor itself is how a
+  // verifier silently starts refusing every profile, so the engine emits both forms.
+  const der = createPublicKey(publicKey).export({ type: 'spki', format: 'der' });
+  return { publicKey, publicKeyB64: der.toString('base64'), privateKey, keyId: keyIdFromPem(publicKey) };
 }
 
 export function keyIdFromPem(publicKeyPem) {

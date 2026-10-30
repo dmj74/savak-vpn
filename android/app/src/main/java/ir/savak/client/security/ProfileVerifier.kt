@@ -20,13 +20,19 @@ object ProfileVerifier {
      * and short decimals). A divergence here reads as a signature failure on every
      * device, which is the worst possible bug to discover in the field.
      */
+    /**
+     * Byte-exact `JSON.stringify` of a key-sorted tree. Kotlin's `joinToString` defaults its
+     * separator to ", " — one space and every signature fails to verify, so the separators are
+     * written out explicitly. Checked by `android/tools/typecheck.sh`, which verifies a profile
+     * signed by the real engine.
+     */
     fun canonical(node: Any?): String = when (node) {
         null -> "null"
         is JSONObject -> {
             val keys = node.keys().asSequence().toSortedSet()
-            keys.joinToString(prefix = "{", postfix = "}") { k -> "\"${escape(k)}\":${canonical(node.get(k))}" }
+            keys.joinToString(separator = ",", prefix = "{", postfix = "}") { k -> "\"${escape(k)}\":${canonical(node.get(k))}" }
         }
-        is JSONArray -> (0 until node.length()).joinToString(prefix = "[", postfix = "]") { canonical(node.get(it)) }
+        is JSONArray -> (0 until node.length()).joinToString(separator = ",", prefix = "[", postfix = "]") { canonical(node.get(it)) }
         is String -> "\"${escape(node)}\""
         is Boolean -> node.toString()
         is Int, is Long -> node.toString()
@@ -40,6 +46,7 @@ object ProfileVerifier {
         return d.toString()
     }
 
+    /** Byte-for-byte what JSON.stringify produces — the engine canonicalises with it. */
     private fun escape(s: String): String = buildString {
         for (ch in s) {
             when (ch) {
@@ -48,7 +55,9 @@ object ProfileVerifier {
                 '\n' -> append("\\n")
                 '\r' -> append("\\r")
                 '\t' -> append("\\t")
-                else -> if (ch < ' ') append("\\u%04x".format(ch.code)) else append(ch)
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                else -> if (ch < ' ') append("\\u%04X".format(ch.code)) else append(ch)
             }
         }
     }
@@ -60,19 +69,29 @@ object ProfileVerifier {
             ?: return VerifyResult(false, null, "unsigned profile — refuse")
         val keyId = sig.optString("keyId")
         val pubB64 = trusted[keyId] ?: return VerifyResult(false, keyId, "unknown signing key $keyId")
-        val signedFields = sig.optJSONArray("signedFields")?.let { a -> (0 until a.length()).map { a.getString(it) } }
-            ?: listOf("profileVersion", "issuer", "user", "servers", "credentials", "policy")
-        val subset = JSONObject()
-        for (f in signedFields) if (profile.has(f)) subset.put(f, profile.get(f))
-        val payload = canonical(subset).toByteArray(Charsets.UTF_8)
+        // The signature covers EVERY field except `signature` itself — including `profileId`,
+        // `createdAt` and `minClientVersion`. Signing only a declared subset would let
+        // `minClientVersion` be rewritten to allow a downgrade, and it is what this verifier
+        // first got wrong (it then refused every real profile, which is the loud direction).
+        val payload = canonical(profile.minus("signature")).toByteArray(Charsets.UTF_8)
+
+        // `signedFields` is a promise about content, not the exclusion list: refuse a
+        // document that dropped a field the signature says it covers.
+        val declared = sig.optJSONArray("signedFields")
+        if (declared != null) {
+            for (i in 0 until declared.length()) {
+                val field = declared.getString(i)
+                if (!profile.has(field)) return VerifyResult(false, keyId, "signed field '$field' is missing from the profile")
+            }
+        }
         return try {
             val kf = KeyFactory.getInstance("Ed25519")
-            val der = Base64.decode(pubB64, Base64.NO_WRAP)
+            val der = b64(pubB64)
             val pub = kf.generatePublic(X509EncodedKeySpec(spkiFromRawEd25519(der)))
             val s = Signature.getInstance("Ed25519")
             s.initVerify(pub)
             s.update(payload)
-            val sigBytes = Base64.decode(sig.getString("value"), Base64.NO_WRAP)
+            val sigBytes = b64(sig.getString("value"))
             if (s.verify(sigBytes)) VerifyResult(true, keyId, "ok")
             else VerifyResult(false, keyId, "signature does not match the canonical payload")
         } catch (e: java.security.NoSuchAlgorithmException) {
@@ -84,6 +103,25 @@ object ProfileVerifier {
         }
     }
 
+    /**
+     * A trust anchor or signature arriving as base64url (the engine uses `base64url` for
+     * some key material) must still verify. Android's decoder is strict about the alphabet,
+     * so normalise the alphabet and the padding here rather than refusing the profile —
+     * a false rejection in the field is indistinguishable from a revocation.
+     */
+    private fun b64(value: String): ByteArray {
+        // de-armour first: an operator pastes the PEM from keys.json into TrustedKeys more
+        // often than they paste the DER, and "unknown signing key" is a cruel error for that.
+        val body = value.trim()
+            .lines()
+            .filterNot { it.startsWith("-----") }
+            .joinToString("")
+            .trim()
+        val normalized = body.replace('-', '+').replace('_', '/')
+        val padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
+        return Base64.decode(padded, Base64.NO_WRAP)
+    }
+
     /** raw 32-byte key → SubjectPublicKeyInfo for Ed25519 (the format Java's KeyFactory wants). */
     private fun spkiFromRawEd25519(raw: ByteArray): ByteArray {
         val prefix = byteArrayOf(
@@ -92,4 +130,12 @@ object ProfileVerifier {
         val key = if (raw.size == prefix.size + 32) raw else prefix + raw
         return key
     }
+}
+
+
+/** Shallow copy without a key — org.json has no such helper and we must not mutate the input. */
+private fun JSONObject.minus(key: String): JSONObject {
+    val out = JSONObject()
+    for (k in this.keys()) if (k != key) out.put(k, this.get(k))
+    return out
 }

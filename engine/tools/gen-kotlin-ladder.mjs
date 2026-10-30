@@ -24,7 +24,14 @@ const num = (v) => {
   if (!Number.isFinite(n)) return null;
   return Number.isInteger(n) ? `${n}` : n.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
 };
-const dbl = (v, fallback = 0) => num(v) ?? num(fallback);
+// Kotlin has no implicit Int→Double: `RungCost(rttCostMs = 1, …)` is a compile error.
+// Everything typed as a Double in LadderTable.kt must therefore be emitted with a decimal
+// point, or the generated file only fails at build time on somebody's laptop.
+const dbl = (v, fallback = 0) => {
+  const n = Number(v ?? fallback);
+  if (!Number.isFinite(n)) return '0.0';
+  return Number.isInteger(n) ? `${n}.0` : n.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+};
 
 function affinityFields(a) {
   // Positional in the Kotlin data class: loss, shaping, udpQos, dpiQuic, dpiSni,
@@ -57,14 +64,18 @@ function ktString(s) {
 // caller decide, matching POLICIES.allowLegacy handling).
 const policies = Object.entries(POLICIES)
   .map(([id]) => {
-    const ids = allowedRungsFor(id, { allowLegacy: true }).map((r) => r.id);
+    // Default policy semantics, i.e. allowLegacy:false: the engine's planForNode() also
+    // drops legacy VMess unless the operator opts in, so a table generated with
+    // allowLegacy:true would hand the phone a rung the server never shipped. (Caught by
+    // android/tools/typecheck.sh, which diffs the Kotlin order against the engine's.)
+    const ids = allowedRungsFor(id, { allowLegacy: false }).map((r) => r.id);
     return `        "${id}" to setOf(${ids.map(ktString).join(', ')}),`;
   })
   .join('\n');
 
 const weights = Object.entries(POLICIES)
   .map(([id, p]) => {
-    const vals = WEIGHT_KEYS.map((k) => num(p.weights?.[k]) ?? '0.0');
+    const vals = WEIGHT_KEYS.map((k) => dbl(p.weights?.[k], 0));
     return `        "${id}" to doubleArrayOf(${vals.join(', ')}), // ${WEIGHT_KEYS.join('|')}`;
   })
   .join('\n');

@@ -64,19 +64,42 @@ gomobile bind -target=android -androidapi 26 -javapkg org.savak.core \
 
 ### ۳. کلیدهای مورد اعتماد برای امضای پروفایل
 
-خروجی `node src/cli.js init` یک `keys.json` می‌دهد. `keyId` و `publicKey` را در
-`TrustedKeys.map` (پایین `MainActivity.kt`) بگذارید. فهرست خالی یعنی «همه رد شود» —
-این پیش‌فرض امن است، نه باگ.
+خروجی `node src/cli.js init` یک `keys.json` می‌دهد که دو شکل از یک کلید دارد:
+`publicKey` (PEM، برای خودِ نود) و `publicKeyB64` (DER فشرده، برای اپ). `keyId` و
+`publicKeyB64` را در `TrustedKeys.map` (پایین `MainActivity.kt`) بگذارید. اگر از روی اشتباه
+PEM را بچسبانید، `ProfileVerifier` خودش armor را برمی‌دارد — چون «کلید نامشروع» بودنِ یک
+کپی‌پیست بد، خطای بسیار گیج‌کننده‌ای است. فهرست خالی یعنی «همه رد شود» — این پیش‌فرض امن
+است، نه باگ.
 
 ## آنچه تست‌شده و آنچه نشده
 
 | | وضعیت |
 |---|---|
-| امتیازدهی و رتبه‌بندی پله‌ها روی ۱۰ سناریوی مسیر | ✅ `LadderParityTest` با fixture تولیدشده از موتور |
-| هیسترزیس تعویض (dwell، حداقل سود، cooldown) | ✅ همان تست، به‌علاوه `test/selector.test.js` در موتور |
+| کامپایل شدن کد ماژول (۹ فایل: `engine/` `security/` `service/` `BootReceiver`) | ✅ اجرا شده با `kotlinc` روی JVM، بدون Android SDK |
+| امتیازدهی و رتبه‌بندی پله‌ها روی ۱۰ سناریوی مسیر (۸۰ ردیف) | ✅ `LadderParityCheck` روی fixture تولیدشده از موتور، **اجرا شده** |
+| اینکه خودِ چک «می‌تواند fail شود» | ✅ `checkDetectsMutation` — یک عددِ عوض‌شده باید گزارش شود |
+| canonical JSON + Ed25519 روی پروفایل امضاشدهٔ `savak init` | ✅ تأیید شد؛ دست‌کاری آدرس، کلید ناشناخته و فهرست خالی → رد |
+| هیسترزیس تعویض (dwell، حداقل سود، cooldown) | ✅ همان fixture، به‌علاوه `test/selector.test.js` در موتور |
 | اعتبارسنجی پیکربندی‌ها مقابل schema رسمی sing-box 1.14.4 | ✅ در موتور، هنگام build باندل |
-| canonical JSON و امضای Ed25519 | ✅ `ProfileVerifier` + `test/profile.test.js` |
-| ساخت با Gradle، رفتار روی دستگاه واقعی، TUN، DoH، battery optimization | ❌ در این محیط ممکن نبود (نه Android SDK، نه Toolchain گو) — باید روی دستگاه خودتان بسنجید |
+| `MainActivity.kt` (Compose) و مرز `libbox` (AAR) | ❌ عمداً stub نشد؛ اولین کامپایل واقعی‌شان در CI/Gradle است |
+| رفتار روی دستگاه واقعی: TUN، DoH، battery optimization، rebind | ❌ هیچ‌وقت روی گوشی اجرا نشده — باید بسنجید |
+
+### اجرای همین چک بدون Gradle
+
+```bash
+JAVA_HOME=/path/to/jdk-17 bash android/tools/typecheck.sh
+```
+
+اگر `kotlinc` روی PATH نباشد، اسکریپت `KOTLIN_COMPILER_JAR` را می‌پذیرد
+(`npm i -g kotlin-compiler` همین jar را می‌دهد). استاب‌های `tools/kotlinc-stubs/` فقط
+داربست‌اند: Gradle آن‌ها را نمی‌بیند، پس هیچ‌وقت نمی‌توانند «سبز شدن» را به جای کد واقعی
+ثابت کنند.
+
+این حلقه چهار باگ واقعی را گرفت (نه یک‌بار که کد «تمیز به‌نظر می‌رسید»): `joinToString` در
+Kotlin با جداساز `", "` canonical JSON را خراب می‌کرد — یعنی **هر** پروفایل امضاشده رد می‌شد؛
+stub بیس۶۴ URL-safe بود؛ `toString` استابِ `JSONObject` به‌جای JSON خروجی map می‌داد؛ و
+`verify` روی زیرمجموعهٔ `signedFields` امضا می‌کرد در حالی‌که موتور کل سند را امضا می‌کند.
+هر چهارم فقط با اجرا دیده شدند.
 
 یعنی: منطق و اعداد قابل اتکا هستند؛ یکپارچگی بیلد و رفتار روی گوشی را باید روی
 دستگاه خودتان بسنجید. اولین چیزی که بعد از بیلد باید چک کنید:

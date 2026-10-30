@@ -9,6 +9,7 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import ir.savak.client.R
 import ir.savak.client.engine.Rung
+import java.io.File
 import kotlin.concurrent.thread
 
 /**
@@ -72,7 +73,7 @@ class SavakVpnService : VpnService() {
         activeRungId = rung.id
         thread(name = "savak-start") {
             val b: TunnelBackend = backend ?: chosenBackend(this).also { backend = it }
-            val res = kotlinx.coroutines.runBlocking { b.start(cfgFile, BundleHolder.mtu) }
+            val res = b.start(cfgFile, BundleHolder.mtu)
             if (!res.ok) {
                 running = false
                 BundleHolder.lastError = res.message ?: "start failed"
@@ -80,7 +81,10 @@ class SavakVpnService : VpnService() {
             } else {
                 running = true
                 BundleHolder.lastError = null
-                BundleHolder.statusLine = "${rung.title} · ${b.describe()}"
+                // The display name lives in the generated ladder table, not in the bundle:
+                // the bundle carries configs, so a title there would be a second source of truth.
+                val title = ir.savak.client.engine.LadderTable.BY_ID[rung.id]?.title ?: rung.id
+                BundleHolder.statusLine = "$title · ${b.describe()}"
             }
         }
     }
@@ -93,7 +97,7 @@ class SavakVpnService : VpnService() {
     fun applyRungTag(outboundTag: String) {
         val b = backend ?: return
         thread(name = "savak-switch") {
-            val res = kotlinx.coroutines.runBlocking { b.setSelectorDefault("savak-ladder", outboundTag) }
+            val res = b.setSelectorDefault("savak-ladder", outboundTag)
             if (!res.ok) {
                 // Fall back to a full config swap for rungs whose kernel differs
                 // (e.g. the WireGuard *endpoint* config has no selector at all).
@@ -104,7 +108,7 @@ class SavakVpnService : VpnService() {
     }
 
     private fun stopEverything() {
-        runCatching { kotlinx.coroutines.runBlocking { backend?.stop() } }
+        runCatching { backend?.stop() }
         runCatching { tun?.close() }
         tun = null
         running = false

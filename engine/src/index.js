@@ -179,6 +179,16 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
     if (linkStr) shareLinks[row.rungId] = linkStr;
   }
 
+  // Which rungs the *node or the device* cannot serve, independent of today's link: the
+  // subset of the gates a phone cannot re-derive (no TLS listener, no CDN fronting
+  // configured, legacy interop off). Shipped so the device refuses the same rungs for the
+  // same reason instead of inventing a verdict it has no data for.
+  const capabilityGate = {};
+  for (const rung of RUNGS) {
+    const g = feasibility(rung, { source: 'neutral', access: 'wifi', rttMs: 30, lossPct: 0, downMbps: 50, mtuCap: 1500 }, mergedClient, node, resolved);
+    if (!g.ok) capabilityGate[rung.id] = g.reason;
+  }
+
   return {
     node: { id: node.id, label: node.label, address: node.address, region: node.region, protocols: node.protocols },
     mode: resolved.mode,
@@ -190,7 +200,11 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
      * what the generated parity fixture (android/.../parity/golden.json) and the app's own
      * scorer are compared against, because "close enough" in a 3-decimal score is exactly
      * how a Kotlin/JavaScript divergence hides for months and then eats a support week.
+     * `inputs.blocked` inside it is the node/device-side gate the phone cannot re-derive
+     * (no TLS listener, no CDN fronting, legacy interop off) — the same verdicts as
+     * `capabilityGate` above, carried per row so the port never has to invent a reason.
      */
+    capabilityGate,
     scoringTrace: ranked.map((r) => ({
       rungId: r.rungId,
       inLadder: r.inLadder,
@@ -200,7 +214,14 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
       raw: r.raw,
       explore: r.explore,
       parts: r.parts,
-      inputs: { evasionApplied: r.evasionApplied ?? 0, canHop: !!r.canHop, ...(r.naiveQuic === null || r.naiveQuic === undefined ? {} : { naiveQuic: r.naiveQuic }) },
+      inputs: {
+        evasionApplied: r.evasionApplied ?? 0,
+        canHop: !!r.canHop,
+        ...(r.naiveQuic === null || r.naiveQuic === undefined ? {} : { naiveQuic: r.naiveQuic }),
+        // Capability/legacy/fronting rejections cannot be re-derived on the device, so the
+        // bundle states them; the phone still decides the link-dependent gates itself.
+        ...(capabilityGate[r.rungId] ? { blocked: capabilityGate[r.rungId] } : {}),
+      },
     })),
     excluded: ranked.filter((r) => !r.feasible).map((r) => ({ rungId: r.rungId, reason: r.reason })),
     chosen,

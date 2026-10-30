@@ -34,9 +34,18 @@ data class Node(
     val warnings: List<String>,
     /** Per-rung scorer inputs echoed by the engine (see engine/src/bundle.js). */
     val scoringInputs: Map<String, ScoringInputs> = emptyMap(),
+    /** rung → reason, for rungs the node/device cannot serve regardless of the link. */
+    val capabilityBlocked: Map<String, String> = emptyMap(),
 )
 
-data class ScoringInputs(val evasionApplied: Double, val canHop: Boolean, val naiveQuic: Boolean?)
+data class ScoringInputs(
+    val evasionApplied: Double,
+    val canHop: Boolean,
+    val naiveQuic: Boolean?,
+    /** Why the *node or the device* cannot run this rung at all (no TLS listener, CDN fronting
+     *  not configured, legacy off). The phone cannot re-derive it, so it must not re-guess it. */
+    val blocked: String? = null,
+)
 
 data class RankRow(val rungId: String, val feasible: Boolean, val score: Double, val reason: String)
 
@@ -79,7 +88,12 @@ fun parseBundle(text: String): Bundle {
         val inputs = HashMap<String, ScoringInputs>()
         for (k in inputsObj.keys()) {
             val v = inputsObj.getJSONObject(k)
-            inputs[k] = ScoringInputs(v.optDouble("evasionApplied", 0.0), v.optBoolean("canHop"), if (v.has("naiveQuic")) v.getBoolean("naiveQuic") else null)
+            inputs[k] = ScoringInputs(
+                evasionApplied = v.optDouble("evasionApplied", 0.0),
+                canHop = v.optBoolean("canHop"),
+                naiveQuic = if (v.has("naiveQuic")) v.getBoolean("naiveQuic") else null,
+                blocked = if (v.has("blocked")) v.optString("blocked").ifEmpty { null } else null,
+            )
         }
         nodes += Node(
             id = n.getString("id"),
@@ -89,6 +103,7 @@ fun parseBundle(text: String): Bundle {
             preferredRung = n.optString("preferredRung", rungs.firstOrNull()?.id ?: ""),
             rungs = rungs,
             ranking = ranking,
+            capabilityBlocked = inputs.mapNotNull { (id, i) -> i.blocked?.let { id to it } }.toMap(),
             warnings = n.optJSONArray("warnings").let { w ->
                 if (w == null) emptyList() else (0 until w.length()).map { w.getString(it) }
             },

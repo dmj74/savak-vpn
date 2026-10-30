@@ -23,13 +23,18 @@ pushی که فایل workflow را بسازد یا عوض کند را بدون �
 بدهید (Settings → Third-party Access / GitHub Apps → Arena → Repository permissions) و بگویید؛
 یک push بیشتر نیست.
 
-## سه کاری که workflow انجام می‌دهد
+## چهار کاری که workflow انجام می‌دهد
 
 | job | چرا ارزش دارد |
 |---|---|
-| `engine` | ۷۸ تست + `check:generated` (اگر `LadderTable.kt` یا fixture هم‌ارزی کهنه باشد، build می‌ایستد) + یک `init`/`bundle` واقعی از CLI |
+| `engine` | ۷۹ تست + `check:generated` (اگر `LadderTable.kt` یا fixture هم‌ارزی کهنه باشد، build می‌ایستد) + یک `init`/`bundle` واقعی از CLI |
+| `kotlin-port` | کامپایل منطق اپ با `kotlinc` و اجرای چک هم‌ارزی (۸۰ ردیف) + تأیید امضای پروفایل — **بدون Android SDK**، پس اگر مدل امتیازدهی از موتور جدا شود، اینجا در چند ثانیه قرمز می‌شود، نه بعد از ۴۵ دقیقه بیلد AAR |
 | `libbox` | ساخت AAR از **تگ pinned** `v1.14.4` با `gomobile` و ثبت sha256 — چون اعتبار configها مقابل schema همان نسخه سنجیده شده |
 | `apk` | `assembleDebug` + `testDebugUnitTest` (پورت Kotlin در برابر اعداد موتور) و آپلود `savak-debug.apk` روی release |
+
+هیچ‌کدام از این‌ها راز نیست: همان دو چک بدون CI هم روی لپ‌تاپ اجرا می‌شوند —
+`cd engine && npm test` و `bash android/tools/typecheck.sh` (با `JAVA_HOME` و
+`KOTLIN_COMPILER_JAR`). چیزی که CI اضافه می‌کند Android SDK، Go و بیلد APK است.
 
 بیلد امضاشدهٔ release عمداً opt-in است: تا وقتی repo variable‏ `HAVE_SIGNING_KEY=true` نشود،
 آن step اجرا نمی‌شود — یک fork بدون keystore نباید فقط به‌خاطر آن قرمز شود، و مخزن عمومی

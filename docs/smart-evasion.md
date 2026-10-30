@@ -108,3 +108,28 @@ sing-box check -c /tmp/client.json
 `--censor` گزینه‌ها: `none · sni-only · udp-throttle · port-qos · quic-kill · udp-block ·
 deep-packet · total-recall`. هر کدام همان `link` مصنوعی را می‌سازند که پروب واقعی می‌سازد؛
 پس چیزی که در این تست می‌بینید همان کدی است که روی گوشی اجرا می‌شود.
+
+## چرا پورت اندروید همان مدل است — زنجیرهٔ ضدِ رانش
+
+خطرناک‌ترین نقطهٔ این معماری آن است که گوشی برای عوض‌کردن پروتکل بین دو heartbeat خودش
+امتیاز می‌دهد. اگر آن امتیازدهی حتی یک‌بار از موتور جدا شود، کاربر «روز بد» می‌بیند، نه
+پیام خطا؛ و این دقیقاً باگی است که ماه‌ها زنده می‌ماند. پس هیچ عددی در این مسیر دستی کپی
+نمی‌شود:
+
+```
+engine/src/ladder.js  ──npm run gen:ladder──▶  android/…/engine/LadderTable.kt
+planForNode()         ──npm run gen:golden ──▶  android/…/test/resources/parity/golden.json
+savak bundle          ────────────────────────▶  nodes[].scoringInputs      (داده، نه منطق)
+```
+
+- `LadderScore.kt` ترجمهٔ دستی `src/score.js` است، ولی اعدادش را fixture قفل می‌کند؛
+  `npm run check:generated` اگر جدول یا fixture کهنه باشد می‌سوزد — پس fixture «عددی که کسی
+  تایپ کرده» نیست، خروجی زندهٔ خودِ موتور است.
+- ورودی‌هایی که گوشی نمی‌تواند بازبسازد — چند فلگ evade واقعاً اعمال شده، آیا hop pool هست،
+  naïve روی H2 سنجیده شده یا نه، و کدام پله capability خودِ گره/دستگاه را ندارد — در باندل با
+  `scoringInputs` می‌آید (`engine/src/bundle.js`). `feasibility()` عمداً در Kotlin
+  بازنویسی نشده: اگر می‌شد، هر نسخهٔ اپ یک نظرسنجیِ مستقل می‌شد.
+- `bash android/tools/typecheck.sh` همان چک را با `kotlinc` روی JVM اجرا می‌کند، بدون
+  Android SDK: ۸۰ ردیفِ رتبه‌بندی و تأیید امضای یک پروفایل واقعی.
+- `LadderParityCheck.checkDetectsMutation` یک عددِ fixture را جابه‌جا می‌کند و مطمئن می‌شود
+  چک **می‌تواند** fail شود. تستی که هیچ‌وقت قرمز نمی‌شود، تست نیست.

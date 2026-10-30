@@ -83,6 +83,14 @@ export async function buildBundle({ profile, client = {}, policy = {}, link, lin
       tuning,
       shareLinks: Object.fromEntries(Object.entries(base.shareLinks).filter(([k]) => wanted.includes(k))),
       ranking: base.ranking.map((r) => ({ rungId: r.rungId, feasible: r.feasible, score: r.score, reason: r.reason })),
+      /**
+       * Everything the device's own scorer cannot re-derive, per rung — how many evasion
+       * flags the server actually applied, whether a hop pool exists, whether naive was
+       * measured over H2, and which rungs the node/device cannot serve at all. Without this
+       * the phone re-ranks from a *different* model of the same config and drifts quietly;
+       * `LadderParityCheck` in the app asserts against these numbers.
+       */
+      scoringInputs: Object.fromEntries(base.scoringTrace.map((t) => [t.rungId, t.inputs])),
       warnings: base.warnings,
     });
   }

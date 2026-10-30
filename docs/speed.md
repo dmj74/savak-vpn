@@ -16,7 +16,7 @@ socket buffer ۲۱۲KB باشد (پیش‌فرض قدیمی لینوکس/اند�
 می‌کند: `connection_receive_window` / `stream_receive_window` (Hysteria2/TUIC/naïve)،
 `initial_packet_size` (یک RTT ذخیره می‌کند: handshake در بستهٔ اول، نه سوم).
 
-نکتهٔ مهم: ما کفِ ۱MiB/۲۵۶KiB گذاشته‌ایم، نه «هرچه ممکن». bufferهای خیلی بزرگ روی لینک
+نکتهٔ مهم: ما کفِ ۱MiB/۲۵۶KiB گذاشته‌ایم، نه «هرچه ممکن». buffer‌های خیلی بزرگ روی لینک
 پرافضط = bufferbloat = latency بالاتر برای همهٔ ترافیک آن دستگاه.
 
 ### ۲. PMTUD و MTU
@@ -27,7 +27,7 @@ socket buffer ۲۱۲KB باشد (پیش‌فرض قدیمی لینوکس/اند�
 
 `tune.js` MTU را از `link.mtuCap` کم می‌کند و برای هر پله floor خودش را چک می‌کند
 (Hysteria2/TUIC: ۱۲۰۰، WireGuard: ۱۲۸۰). اگر path به ۱۱۸۰ رسیده باشد، آن پله **حذف**
-می‌شود نه اینکه با packetهای شکسته امتحان شود. `disable_path_mtu_discovery` فقط وقتی
+می‌شود نه اینکه با بسته‌های شکسته امتحان شود. `disable_path_mtu_discovery` فقط وقتی
 true می‌شود که خودمان size را می‌دانیم.
 
 ### ۳. پейسینگ: BRUTAL یا BBR، نه هر دو
@@ -85,8 +85,8 @@ node src/cli.js serve --port 8080
 
 | ادعا | واقعیت در اینجا |
 |---|---|
-| «Multiplexing = سرعت بیشتر» | mux فقط handshake کم می‌کند؛ روی لینک پرفقد، head-of-line blocking یک اتصال مشترک افت را برای **همه**ٔ جریان‌ها پخش می‌کند. `multiplex` را فقط برای rungهایی emit می‌کنیم که واقعاً سود می‌برند. |
-| «`fragment` همیشه کمک می‌کند» | fragmenting recordها bytes اضافه و CPU می‌گیرد؛ فقط وقتی emit می‌شود که DPI بستهٔ plain را می‌خواند (`sni-only`). |
+| «Multiplexing = سرعت بیشتر» | mux فقط handshake کم می‌کند؛ روی لینک پرافتطاع، head-of-line blocking یک اتصال مشترک افت را برای **همهٔ** جریان‌ها پخش می‌کند. `multiplex` را فقط برای rung‌هایی emit می‌کنیم که واقعاً سود می‌برند. |
+| «`fragment` همیشه کمک می‌کند» | تکه‌تکه کردن recordها یعنی بایت و CPU اضافه؛ فقط وقتی emit می‌شود که DPI بستهٔ plain را می‌خواند (`sni-only`). |
 | «100% MTU = 1500» | روی موبایل ۱۵۰۰ یعنی fragmentation. از `link.mtuCap` می‌خوانیم. |
 | «هرچه buffer بزرگ‌تر، بهتر» | bufferbloat. KISS: کفِ محاسبه‌شده با BDP، نه بینهایت. |
 | «UDP همیشه سریع‌تر است» | اگر path UDP را throttle کند، UDP یعنی ۴۰٪ افت و ۳ برابر handshake. `udpThrottled` آن پله را حذف/تنبیه می‌کند. |

@@ -23,7 +23,7 @@
 | `tuic_v5` | TUIC (IMUX) | `0-RTT resumption`: بعد از خواب مودم، reconnect بدون handshake | موبایل، سوییچ آنتن، latency-sensitive |
 | `vless_reality_tcp` | Xray/VLESS Reality | handshake با یک **سایت واقعی** تمام می‌شود؛ نه گواهی ماست، نه Hello قلابی | وقتی active probing دارند؛ پیش‌فرض امن ما |
 | `vless_reality_grpc` | v2fly gRPC | چند RPC کوچک روی یک HTTP/2 بلند | middlebox که اتصال TCP بلند را می‌کُشد؛ پشت CDN |
-| `wg_uot` | WireGuard | کم‌هزینه‌ترین crypto؛ ≈۱٫۵ برابر goodput نسبت به تونل TLS | لینک تمیز UDP، CPU کم (گوشی قدیمی) |
+| `wg_uot` | WireGuard | کم‌هزینه‌ترین crypto؛ خروجی مؤثرِ ≈۱٫۵ برابر نسبت به تونل TLS | لینک تمیز UDP، CPU کم (گوشی قدیمی) |
 | `anytls` | Amnezia/AnyTLS | هزینهٔ پنهان‌کاری با padding خریده می‌شود نه با crypto | می‌خواهیم شبیه HTTPS باشیم ولی ارزان‌تر از TLS-inside-TLS |
 | `ss2022` | shadowsocks → Outline | سربار framing تقریباً صفر | پهنای باند کم است ولی TLS/QUIC شدنی است |
 | `naive_h3` | NaïveProxy | رفتار مرورگر + proof-of-work برای probe-defense | وقتی «هیچ چیز غیرمرورگری» عبور می‌کند |
@@ -32,7 +32,7 @@
 | `tor_bridge` | Tor/obfs4 | وقتی آی‌پی و TLS ما هیچ ارزشی ندارند | طبقهٔ آخر: سانسور سراسری |
 
 هیچ‌کدام «ترکیب» نامرتب نیست: هر پله **یک config مجزای sing-box** است که کنار بقیه در
-یک `selector` قرار می‌گیرد. پس انتخاب، جابه‌جا شدن بین configهای از پیش معتبر است — نه
+یک `selector` قرار می‌گیرد. پس انتخاب، جابه‌جا شدن بین config‌های از پیش معتبر است — نه
 مذاکرهٔ یک پروتکل hybrid روی سیم.
 
 > «ترکیب فیلترشکن‌های معروف» یعنی همین: بهترین ایدهٔ هر stack متن‌بازِ شناخته‌شده در یک
@@ -76,7 +76,7 @@
 | پرش پورت | یک port-qos را دور می‌زند | اگر throttle پروتکل‌محور باشد فایده ندارد (مدل ما دقیقاً همین را می‌داند: `udpThrottled` ≠ `portThrottled`) |
 | SPKI pinning | MITM گواهی جعلی را بی‌اثر می‌کند، بدون `insecure:true` | باید با هر تعویض گواهی به‌روز شود |
 | `tls: {certificate_public_key_sha256}` | جای `insecure` | یک خط در config، یک لایهٔ دفاع واقعی |
-| spoof/packet injection (سطح kernel) | تغییر real packetها | روت/`CAP_NET_RAW` لازم است → **روی اندروید در دسترس نیست**؛ عمداً استفاده نشده |
+| spoof/packet injection (سطح kernel) | تغییر بسته‌های واقعی روی سیم | روت/`CAP_NET_RAW` لازم است → **روی اندروید در دسترس نیست**؛ عمداً استفاده نشده |
 | ECH | پنهان‌کردن SNI در TLS1.3 | به `sing-box generate ech-keypair` و پشتیبانی سرویس‌دهنده نیاز دارد؛ هنوز emit نمی‌شود |
 
 ## چه چیزی را پوشش نمی‌دهد (صادقانه)

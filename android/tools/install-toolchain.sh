@@ -65,6 +65,14 @@ check_tools() {
   # The two things an npm/PyPI-only network can still install: a Kotlin compiler and a JRE.
   # They run the parity + signature checks (tools/typecheck.sh). They cannot build an APK —
   # no javac, no aapt2 — and saying so is the whole point of this script.
+  # aapt2: a genuine Android tool, packaged on PyPI (the wheel forgets the exec bit).
+  if [ -z "${AAPT2:-}" ]; then
+    AAPT2=$(command -v aapt2 2>/dev/null || true)
+    [ -n "$AAPT2" ] || AAPT2=$(ls "$HOME"/.local/lib/python3*/site-packages/aapt2/bin/Linux/aapt2 2>/dev/null | head -1 || true)
+  fi
+  if [ -n "${AAPT2:-}" ] && [ -x "${AAPT2:-}" ]; then good "aapt2: $("$AAPT2" version 2>&1 | head -1)"; else
+    say "  · aapt2 (اختیاری، برای اعتبار res/): pip install --user aapt2 && chmod +x ~/.local/lib/python3*/site-packages/aapt2/bin/Linux/aapt2"
+  fi
   if [ -n "${KOTLIN_COMPILER_JAR:-}" ] || command -v kotlinc >/dev/null 2>&1; then
     good "kotlinc هست → چک‌های منطقی اندروید: bash android/tools/typecheck.sh"
   else
@@ -97,8 +105,16 @@ check_network() {
   probe "https://github.com/SagerNet/sing-box" "سورس sing-box (github.com)" || { dead=1; miss+=("gh"); }
   if [ "$dead" = 1 ]; then
     say ""
-    say "  با میزبان‌های بسته، بیلد APK شدنی نیست — هیچ دور زنی هم نیست: artifact‌های Compose"
-    say "  فقط روی maven.google.com/Central‌اند و aapt2 فقط در Android SDK. در این حالت"
+    say "  با میزبان‌های بسته، بیلد کامل APK شدنی نیست. چیزی که از PyPI/npm می‌آید و مفید است:"
+    say "    npm i kotlin-compiler        → کامپایل Kotlin (چک‌های منطقی همین‌جا اجرا می‌شود)"
+    say "    pip i jdk4py                 → JRE (javac ندارد؛ برای typecheck بس است)"
+    say "    pip i aapt2                  → aapt2 واقعی، برای اعتبار سنجی res/ (این اسکریپت"
+    say "                                   خودش پیدایش می‌کند؛ chmod +x لازم دارد)"
+    say "  اما این‌ها از هیچ‌کدام درنمی‌آیند و بدون‌شان APK معنایی ندارد: artifact‌های androidx"
+    say "  Compose و AGP (فقط maven.google.com/Central)، android.jar قابل‌اتکا، d8، و Go+NDK"
+    say "  برای libbox — یعنی همان هستهٔ تانل. «APK» بدون آن چهارتا یک اپ است که ترافیک را"
+    say "  محافظت نمی‌کند و وانمود می‌کند می‌کند؛ آن را نمی‌سازیم."
+    say ""
     say "  درست‌ترین کار همان CI است: cp ci/android-apk.yml .github/workflows/ && git push"
     say ""
     say "متوقف شدم: چیزی نصب نکردم و چیزی را «ساخته شد» اعلام نمی‌کنم."

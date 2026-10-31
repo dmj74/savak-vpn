@@ -105,12 +105,20 @@ sha256 است. اگر شبکه بسته باشد، اسکریپت **چیزی ن�
 JAVA_HOME=/path/to/jdk-17 bash android/tools/typecheck.sh
 ```
 
-سه پایه است: (۱) `tools/res-check.py` — گراف ارجاع‌ها بین `R.*`، `res/`، `AndroidManifest.xml`
-و `build.gradle.kts`؛ (۲) هم‌ارزی امتیازدهی با fixture تولیدشده از موتور؛ (۳) تأیید امضای
-پروفایلی که خودِ `savak init` امضا کرده. (۱) سه‌چیز را همین حالا گرفت: دو وابستگی که هیچ
-source‌ای import‌شان نمی‌کرد (`androidx.security:security-crypto` و
-`lifecycle-runtime-compose` — حجم APK + سطح CVE، پس حذف شدند)، و کلاسی که manifest اعلام
-می‌کرد و وجود نداشت (این‌جا نداشت، ولی چک می‌کند).
+چهار پایه است: (۱) `tools/res-check.py` — گراف ارجاع‌ها بین `R.*`، `res/`، `AndroidManifest.xml`
+و `build.gradle.kts`؛ (۲) `aapt2 compile` روی همهٔ `res/` — با **خودِ ابزار واقعی اندروید**،
+نسخهٔ `2.19-7832930`، که از PyPI می‌آید (`pip install aapt2`؛ فقط `chmod +x` لازم دارد)؛
+(۳) هم‌ارزی امتیازدهی با fixture تولیدشده از موتور؛ (۴) تأیید امضای پروفایلی که خودِ
+`savak init` امضا کرده.
+
+`aapt2 link` عمداً انجام نمی‌شود: به `android.jar` فریمورک نیاز دارد و برداشتن یکی از مخزن
+یک نفر ناشناس، به‌عنوان ورودیِ بیلد یک VPN، همان چیزی است که کل این مخزن بر ضدش نوشته شده
+— همان‌طور که `libbox` به یک تگ pinned و sha256 قفل شده. هر چکی که اینجا سبز می‌شود، با
+ابزاری است که منبعش مشخص است.
+
+پایهٔ ۱ سه چیز را گرفت: دو وابستگی که هیچ source‌ای import‌شان نمی‌کرد
+(`androidx.security:security-crypto` و `lifecycle-runtime-compose` — حجم APK + سطح CVE، پس
+حذف شدند)، و یک کلاس که manifest اعلام می‌کرد و وجود نداشت (این‌جا نداشت، ولی چک می‌کند).
 
 اگر `kotlinc` روی PATH نباشد، اسکریپت `KOTLIN_COMPILER_JAR` را می‌پذیرد
 (`npm i -g kotlin-compiler` همین jar را می‌دهد). استاب‌های `tools/kotlinc-stubs/` فقط

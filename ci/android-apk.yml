@@ -67,6 +67,12 @@ jobs:
         run: npm ci --prefix engine
       - name: kotlinc, no Android SDK required
         run: npm install -g kotlin-compiler@2.4.21
+      # aapt2 from PyPI: real resource validation with no SDK download (the wheel ships the
+      # Linux binary but not its exec bit). typecheck.sh finds it on its own.
+      - name: aapt2 for resource checks
+        run: |
+          python3 -m pip install --user aapt2 || pip install --user aapt2
+          chmod +x "$HOME"/.local/lib/python3*/site-packages/aapt2/bin/Linux/aapt2 || true
       - name: compile the module, then parity + profile trust
         run: |
           export KOTLIN_COMPILER_JAR="$(npm root -g)/kotlin-compiler/lib/kotlin-compiler.jar"

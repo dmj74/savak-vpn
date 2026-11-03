@@ -74,7 +74,9 @@ PEM را بچسبانید، `ProfileVerifier` خودش armor را برمی‌د�
 ## ساخت APK روی دستگاه خودتان (اسکریپتش هست)
 
 اگر شبکه‌تان به `services.gradle.org`، `dl.google.com`، `maven.google.com`، Central و `go.dev`
-می‌رسد، یک اسکریپت همهٔ لازم را می‌گیرد و می‌سازد:
+می‌رسد، یک اسکریپت همهٔ لازم را می‌گیرد و می‌سازد — و هر دانلود را **قبل از باز کردن** با
+checksum خودِ منبع می‌سنجد (Gradle از `…bin.zip.sha256`، Go از `go.dev/dl/?mode=json`،
+cmdline-tools از `repository2-3.xml`)؛ اگر checksum به دست نیاید، نصب نمی‌کند:
 
 ```bash
 bash android/tools/install-toolchain.sh --check   # چه هست / چه نیست / شبکه باز است یا نه

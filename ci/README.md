@@ -23,6 +23,19 @@ pushی که فایل workflow را بسازد یا عوض کند را بدون �
 بدهید (Settings → Third-party Access / GitHub Apps → Arena → Repository permissions) و بگویید؛
 یک push بیشتر نیست.
 
+## فقط باینری می‌خواهید: `ci/apk-only.yml`
+
+`apk-only.yml` حداقلِ همان کار است (libbox از تگ pinned → `assembleDebug` → sha256 → artifact و
+ضمیمه به release) و برای «فقط فایل APK را بده» ساخته شده؛ `android-apk.yml` همان به‌علاوهٔ تست
+موتور، چک kotlinc/parity و بیلد امضاشدهٔ release است. فعال‌سازی هر دو یکی است:
+
+```bash
+# با gh، یک دستور — توجه: این با توکن *شما* کار می‌کند؛ با اپ Arena رد می‌شود (403 workflows)
+gh api -X PUT repos/dmj74/savak-vpn/contents/.github/workflows/apk-only.yml \
+  -f message="ci: enable the debug-APK build" -f branch=main \
+  -f content="$(base64 -w0 ci/apk-only.yml)"
+```
+
 ## چهار کاری که workflow انجام می‌دهد
 
 | job | چرا ارزش دارد |

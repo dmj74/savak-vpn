@@ -17,10 +17,19 @@
 # انتخاب/خطاها در --check.
 #   PREFIX=/opt/savak bash android/tools/install-toolchain.sh
 #
-# چرا این‌جا: بیلد APK به چهار چیز نیاز دارد که هیچ‌کدام از داخل محیطِ نوشتنِ این کد قابل
-# گرفتن نیستند (اندازه‌گیری‌شده): Gradle، Android SDK (aapt2/platforms/build-tools)، Go+NDK
-# برای libbox، و artifact‌های androidx Compose. هر چهار میزبان مسدودند. پس این اسکریپت همان
-# «تمام موارد لازم» را روی دستگاه شما نصب می‌کند و در پایان savak-debug.apk را تحویل می‌دهد.
+# چرا این‌جا: بیلد APK به چیزهایی نیاز دارد که از داخل محیطِ نوشتنِ این کد قابل گرفتن نیستند.
+# چیزی که واقعاً مانع است، سطح دسترسی به میزبان است — نه نبودِ ابزار: پنج میزبانِ لازم
+#   dl.google.com · maven.google.com · repo1.maven.org · services.gradle.org · go.dev
+# handshakeٔ TLS‌شان می‌میرد (اندازه‌گیری‌شده، هم‌زمان با باز بودنِ github.com/api.github.com/
+# codeload/npmjs/pypi که همه 200 می‌دهند):
+#   curl: (35) OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to dl.google.com:443
+# پس این اسکریپت همان «تمام موارد لازم» را روی دستگاه شما نصب می‌کند و در پایان savak-debug.apk
+# را تحویل می‌دهد. دو نکته که جست‌وجویشان وقتِ بازبینی را می‌گیرد (دو بار اندازه‌گیری شده):
+#   - d8 در npm هست ولی به‌درد نمی‌خورد: d8-termux یک «d8.jar» می‌فرستد که jar نیست — سه فایل
+#     classes*.dex است برای dalvikvm ترموکس؛ روی JVM معمولی: ClassNotFoundException.
+#   - امضای APK خالص‌نویسی‌شدنی است (apk_sign_ts: v1/v2/v3 با node-forge/jks-js/pako) ولی بدون
+#     dex بی‌مصرف است. و android.jar هم از GitHubِ افرادِ ناشناس پیدا می‌شود؛ برای یک VPN،
+#     stubs/dexer که یک غریبه تعیین کرده یعنی او کد داخل APK را تعیین کرده — خط قرمز.
 #
 set -euo pipefail
 
@@ -150,12 +159,17 @@ check_network() {
     say "    pip i jdk4py                 → JRE (javac ندارد؛ برای typecheck بس است)"
     say "    pip i aapt2                  → aapt2 واقعی، برای اعتبار سنجی res/ (این اسکریپت"
     say "                                   خودش پیدایش می‌کند؛ chmod +x لازم دارد)"
-    say "  اما این‌ها از هیچ‌کدام درنمی‌آیند و بدون‌شان APK معنایی ندارد: artifact‌های androidx"
-    say "  Compose و AGP (فقط maven.google.com/Central)، android.jar قابل‌اتکا، d8، و Go+NDK"
-    say "  برای libbox — یعنی همان هستهٔ تانل. «APK» بدون آن چهارتا یک اپ است که ترافیک را"
-    say "  محافظت نمی‌کند و وانمود می‌کند می‌کند؛ آن را نمی‌سازیم."
+    say "  و این‌ها بدون آن پنج میزبان درنمی‌آیند (maven.google.com/Central/services.gradle.org/"
+    say "  dl.google.com/go.dev — TLS‌شان همین‌جا قطع می‌شود): artifact‌های androidx Compose و"
+    say "  AGP، android.jar قابل‌اتکا، d8 واقعی، و Go+NDK برای libbox — یعنی همان هستهٔ تانل."
+    say "  «APK» بدون آن‌ها اپی است که ترافیک را محافظت نمی‌کند ولی وانمود می‌کند می‌کند؛"
+    say "  آن را نمی‌سازیم."
     say ""
-    say "  درست‌ترین کار همان CI است: cp ci/android-apk.yml .github/workflows/ && git push"
+    say "  درست‌ترین کار همان CI است (کامیت با یک دستور، بدون clone):"
+    say "    gh api -X PUT repos/<owner>/<repo>/contents/.github/workflows/apk-only.yml \\"
+    say "      -f message='ci: enable the debug-APK build' -f branch=main \\"
+    say '      -f content="$(base64 -w0 ci/apk-only.yml)"   # یا ci/android-apk.yml برای همهٔ چک‌ها'
+    say '    (با احراز هویت خودتان — اپ Arena روی pathٔ .github/workflows/* مجاز نیست: 403)' 
     say ""
     say "متوقف شدم: چیزی نصب نکردم و چیزی را «ساخته شد» اعلام نمی‌کنم."
     return 1

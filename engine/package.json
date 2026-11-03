@@ -1,0 +1,39 @@
+{
+  "name": "savak-engine",
+  "version": "0.2.0",
+  "description": "Savak Smart Evasion Ladder — adaptive multi-transport engine for the Android smart-proxy client",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "savak": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.js'",
+    "gen:ladder": "node tools/gen-kotlin-ladder.mjs",
+    "gen:golden": "node tools/golden.mjs",
+    "generate": "npm run gen:ladder && npm run gen:golden",
+    "check:generated": "node tools/gen-kotlin-ladder.mjs --check && node tools/golden.mjs --check",
+    "gen": "node src/cli.js gen",
+    "race": "node src/cli.js race",
+    "serve": "node src/cli.js serve",
+    "test:watch": "node --test --watch 'test/*.test.js'"
+  },
+  "keywords": [
+    "sing-box",
+    "hysteria2",
+    "vless",
+    "reality",
+    "tuic",
+    "wireguard",
+    "censorship-circumvention"
+  ],
+  "devDependencies": {
+    "ajv": "^8.17.1"
+  }
+}

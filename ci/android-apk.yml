@@ -1,0 +1,180 @@
+name: build
+
+# What this proves, and what it cannot:
+#   • engine  — real: unit tests + schema validation of every generated config.
+#   • kotlin-port — real: the app's scorer compiled with kotlinc and diffed against the
+#               engine on a generated fixture (and a signed profile verified end to end).
+#   • libbox  — real: the Go core compiled for Android and installed as an AAR.
+#   • apk     — assembles the debug APK. Nobody has run it on a phone from CI; treat a
+#               green build as "it compiles", not as "the tunnel works".
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    paths: ['engine/**', 'android/**', 'server/**', '.github/workflows/**']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm', cache-dependency-path: engine/package-lock.json }
+      - name: install (ajv only)
+        run: npm ci --prefix engine
+      - name: generated artifacts are not stale
+        run: npm --prefix engine run check:generated
+      - name: tests (schema-validated configs, real loopback probes)
+        run: npm --prefix engine test
+      - name: "sanity: a full node init + bundle from the CLI"
+        run: |
+          cd engine
+          node src/cli.js init --hostname ci.example.net --node ci-1 --outDir "$RUNNER_TEMP/init"
+          node src/cli.js bundle --profile "$RUNNER_TEMP/init/profile.json" --node ci-1 --out "$RUNNER_TEMP/bundle.json"
+          node -e 'const b=require(process.env.RUNNER_TEMP+"/bundle.json");if(!b.ok||!b.nodes[0].allowedRungs.length)process.exit(1);console.log("bundle ok:",b.nodes[0].allowedRungs.length,"rungs")'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-configs
+          root: ${{ runner.temp }}
+          path: 'init/**'
+          if-no-files-found: error
+
+  # The device's own scorer, checked with no Android SDK at all: kotlinc compiles
+  # engine/ + security/ + service/ against the stubs in android/tools/kotlinc-stubs, then
+  # runs (1) the parity fixture generated from this engine and (2) verification of a profile
+  # the real `savak init` signed. Green here means the phone ranks with the server's model;
+  # it is also 100x cheaper than the libbox job, so a scorer divergence fails fast.
+  kotlin-port:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm', cache-dependency-path: engine/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+      - name: install (ajv — the CLI that signs the test profile)
+        run: npm ci --prefix engine
+      - name: kotlinc, no Android SDK required
+        run: npm install -g kotlin-compiler@2.4.21
+      # aapt2 from PyPI: real resource validation with no SDK download (the wheel ships the
+      # Linux binary but not its exec bit). typecheck.sh finds it on its own.
+      - name: aapt2 for resource checks
+        run: |
+          python3 -m pip install --user aapt2 || pip install --user aapt2
+          chmod +x "$HOME"/.local/lib/python3*/site-packages/aapt2/bin/Linux/aapt2 || true
+      - name: compile the module, then parity + profile trust
+        run: |
+          export KOTLIN_COMPILER_JAR="$(npm root -g)/kotlin-compiler/lib/kotlin-compiler.jar"
+          test -f "$KOTLIN_COMPILER_JAR"
+          bash android/tools/typecheck.sh
+
+  libbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SINGBOX_VERSION: 1.14.4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.24' }
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;27.0.12077973 platforms;android-35 build-tools;35.0.0'
+      - name: build the AAR
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          bash android/tools/build-libbox.sh
+      - name: record the core identity
+        run: |
+          cd android/third_party/maven/org/savak/core/libbox/$SINGBOX_VERSION
+          sha256sum libbox-$SINGBOX_VERSION.aar | tee CHECKSUM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libbox-maven
+          # `root` is what the download side strips: without it the entries keep the
+          # android/… prefix and the local maven repo ends up at android/third_party/maven/
+          # android/third_party/maven/… — a "dependency not found" that looks like a typo.
+          root: android/third_party/maven
+          path: '**'
+          if-no-files-found: error
+
+  apk:
+    needs: [libbox, engine]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: libbox-maven, path: android/third_party/maven }
+      - name: show what we linked against
+        run: cat android/third_party/maven/org/savak/core/libbox/*/CHECKSUM
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      # AGP 8.5.2 needs Gradle ≥ 8.7; the runner's own `gradle` is whatever the image shipped,
+      # so ask for a version explicitly instead of hoping the image aged well.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+          cache-disabled: 'false'
+      # compileSdk 35 / build-tools 35.0.0 have to be present — AGP does not download them
+      # during a CI run, it just fails with "Failed to find target with hash string".
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0 platform-tools'
+          accept-android-licenses: true
+      - name: debug APK (installable as-is; no trusted profile inside)
+        run: |
+          cd android
+          gradle --no-daemon :app:assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/savak-debug.apk"
+      - name: unit tests (Kotlin port vs the engine's parity fixture)
+        run: cd android && gradle --no-daemon :app:testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with: { name: savak-debug-apk, path: savak-debug.apk, if-no-files-found: error }
+
+      # A signed release build exists only if the operator put keystores in secrets — the
+      # workflow must not invent a signing key that then ships in a public repo's history.
+      # Opt-in: set the repo *variable* HAVE_SIGNING_KEY=true once the three secrets exist,
+      # so a fork without a keystore still produces a debug APK instead of a red X.
+      - name: release APK (needs SAVAK_KEYSTORE_B64 + SAVAK_KEYSTORE_PASSWORD)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && vars.HAVE_SIGNING_KEY == 'true' }}
+        # One `env:` block, not two: a duplicate mapping key makes the ENTIRE workflow file
+        # fail to parse, so the debug APK would never build either.
+        env:
+          SAVAK_KEYSTORE_B64: ${{ secrets.SAVAK_KEYSTORE_B64 }}
+          SAVAK_KEYSTORE_PASSWORD: ${{ secrets.SAVAK_KEYSTORE_PASSWORD }}
+          SAVAK_KEY_PASSWORD: ${{ secrets.SAVAK_KEY_PASSWORD }}
+          SAVAK_KEY_ALIAS: ${{ vars.SAVAK_KEY_ALIAS || 'savak' }}
+        run: |
+          # Keystore arrives base64-encoded in a secret; the trust anchors for profiles are
+          # a separate concern and stay compiled into the APK.
+          printf '%s' "$SAVAK_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/savak.jks"
+          { echo "storeFile=$RUNNER_TEMP/savak.jks"; echo "keyAlias=$SAVAK_KEY_ALIAS"; } > server/release-signing.properties
+          test -s server/release-signing.properties
+          cd android
+          gradle --no-daemon :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/savak.apk"
+      - uses: actions/upload-artifact@v4
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        with: { name: savak-apk, path: savak*.apk, if-no-files-found: ignore }
+      - name: publish on the release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: savak*.apk
+          generate_release_notes: true
+          body: |
+            Debug APK is unsigned-with-debug-key: installable, but do not distribute it as
+            "the" app. The engine source is the same tag, so `savak bundle` output matches
+            what this build expects.

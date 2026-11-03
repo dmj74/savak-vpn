@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">savak</string>
+    <string name="notif_channel">وضعیت اتصال</string>
+    <string name="notif_title">savak فعال است</string>
+    <string name="notif_text">پروتکل: %1$s</string>
+    <string name="mode_auto">خودکار</string>
+    <string name="mode_speed">سرعت</string>
+    <string name="mode_stealth">پنهان‌کاری</string>
+    <string name="mode_game">کم‌تأخیر</string>
+    <string name="mode_resist">مقاوم در برابر فیلترینگ</string>
+    <string name="measure">اندازه‌گیری مسیر</string>
+    <string name="connect">وصل شو</string>
+    <string name="ladder_title">نردبان پروتکل</string>
+    <string name="unavailable">غیرقابل استفاده</string>
+    <string name="score">امتیاز</string>
+    <string name="error_signature">امضای پروفایل معتبر نیست</string>
+    <string name="error_no_bundle">باندل پیکربندی پیدا نشد</string>
+    <string name="perm_denied">دسترسی VPN داده نشد؛ بدون آن ترافیک از تونل رد نمی‌شود</string>
+</resources>

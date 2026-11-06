@@ -72,6 +72,41 @@ verify_sha() {   # verify_sha FILE ALGO EXPECTED_HEX
   good "checksum OK — $algo $got"
 }
 
+verify_apk_fixtures() {   # throwaway zips in a temp dir — nothing built here is a deliverable
+  command -v zip >/dev/null 2>&1 || { say "  zip نیست — این بخش پرشید (نه شکست)"; return 0; }
+  local d; d=$(mktemp -d)
+  mk_apk() {   # mk_apk NAME [abi…] → $d/NAME.apk (fake entries: structure only)
+    local name=$1; shift
+    local f="$d/$name"; rm -rf "$f" "$d/$name.apk"; mkdir -p "$f/assets"
+    printf '<manifest/>' > "$f/AndroidManifest.xml"
+    printf 'ARSC' > "$f/resources.arsc"
+    printf 'dex\n035\000' > "$f/classes.dex"
+    printf '{}' > "$f/assets/bundle.json"
+    local a
+    for a in "$@"; do mkdir -p "$f/lib/$a"; printf 'ELF' > "$f/lib/$a/libmobile.so"; done
+    ( cd "$f" && zip -qr "$d/$name.apk" AndroidManifest.xml resources.arsc classes.dex assets $( [ "$#" -gt 0 ] && echo lib ) ) >/dev/null 2>&1
+  }
+  # ۱) بدون libbox → باید **رد** شود؛ این همان حالتی است که هرگز تحویل نمی‌دهم
+  mk_apk notunnel
+  if verify_apk "$d/notunnel.apk" >/dev/null 2>&1; then
+    say "  ✗ APKِ بی‌libbox **قبول** شد — چک بی‌اثر است (این باید رد کند)"; rm -rf "$d"; return 1
+  fi
+  say "  ✓ APKِ بدون lib/<abi>/*.so رد شد — «APK»ِ بی‌تانل عبور نمی‌کند"
+  # ۲) یک ABI از سه‌تا → باید رد شود (اثبات اینکه چک تزئینی نیست)
+  mk_apk partial arm64-v8a
+  if verify_apk "$d/partial.apk" >/dev/null 2>&1; then
+    say "  ✗ APKِ تک‌ABI **قبول** شد — چکِ ABI کار نمی‌کند"; rm -rf "$d"; return 1
+  fi
+  say "  ✓ APKِ با یک ABI (از سه‌تا) رد شد"
+  # ۳) سه ABI → باید قبول شود (اثبات اینکه چک همیشه‌رد‌کننده نیست)
+  mk_apk full arm64-v8a armeabi-v7a x86_64
+  if ! verify_apk "$d/full.apk" >/dev/null 2>&1; then
+    say "  ✗ APKِ کامل **رد** شد — چک بیش‌ازحد سخت یا غلط است"; rm -rf "$d"; return 1
+  fi
+  say "  ✓ APKِ با libbox هر سه ABI قبول شد"
+  rm -rf "$d"
+}
+
 self_test() {
   say "خودآزمونِ verify_sha (اینجا اجرا می‌شود، نه فقط نوشته)"
   local d; d=$(mktemp -d); printf 'savak\n' > "$d/f"
@@ -82,6 +117,9 @@ self_test() {
   if verify_sha "$d/f" sha256 "" 2>/dev/null; then say "  ✗ فقدان checksum باید خطا باشد"; exit 1; fi
   say "  ✓ نبودِ checksum خطاست، نه «skip»"
   rm -rf "$d"
+  say ""
+  say "خودآزمونِ verify_apk (سه حالت ساختاری، با فیکسچرِ zipِ موقت)"
+  verify_apk_fixtures || { say "  ✗ verify_apk خودش را ثابت نکرد"; exit 1; }
   say "self-test OK"
 }
 
@@ -272,6 +310,12 @@ build() {
   cp "$apk" "$APK_OUT"
   say ""
   say "APK:    $APK_OUT ($(stat -c %s "$APK_OUT" 2>/dev/null || stat -f %z "$APK_OUT") بایت)"
+  say "ساختار فایل (dex + libbox برای هر ABI + bundle):"
+  if ! verify_apk "$APK_OUT"; then
+    rm -f "$APK_OUT"
+    bad "APK رد شد و نگه‌داشته شد — فایلِ بی‌تانل تحویل نمی‌دهم (خطای بالا را ببینید)"
+    return 3
+  fi
   say "sha256: $(sha256sum "$APK_OUT" | cut -d' ' -f1)"
   say "چک قبل از نصب: $(unzip -l "$APK_OUT" | tail -1)"
   say "                 و KOTLIN parity: gradle :app:testDebugUnitTest سبز بود"
@@ -292,10 +336,93 @@ docker_hint() {
   say "  سپس savak-debug.apk کنار سورس است."
 }
 
+# ── 4b) verify_apk: a structural gate on the *product*, not a cosmetic listing ──────────────
+# چرا این تابع هست: بدترین خروجیِ این مخزن اپی است که آیکون «VPN روشن» دارد و ترافیک را از
+# تانل رد نمی‌کند. آن حالت از یک بیلد شکست‌خورده قابل تشخیص نیست — پس باید مکانیکی سنجیده شود،
+# نه با چشم. چیزی که چک می‌کند فقط ساختار zip و حضورِ فایل‌هاست: هیچ‌کدام ادعای «امن است» نیست،
+# فقط «تانل داخل این فایل هست یا نه».
+APK_ABIS=${APK_ABIS:-"arm64-v8a armeabi-v7a x86_64"}   # must match abiFilters in app/build.gradle.kts
+
+verify_apk() {   # verify_apk FILE  → exit 3 اگر فایل «APK» باشد ولی تانل نداشته باشد
+  local apk="$1" bad=0 list a n
+  if [ ! -f "$apk" ]; then say "  ✗ فایل نیست: $apk"; return 1; fi
+  if ! unzip -t "$apk" >/dev/null 2>&1; then say "  ✗ zip سالم نیست (هر APK یک zip است)"; return 1; fi
+  list=$(unzip -Z1 "$apk" 2>/dev/null) || { say "  ✗ فهرست zip خوانده نشد"; return 1; }
+  in_list() { printf '%s\n' "$list" | grep -qx -- "$1"; }
+
+  for a in AndroidManifest.xml resources.arsc; do
+    if in_list "$a"; then say "  ✓ $a"; else say "  ✗ $a نیست — بستهٔ منابع/مانیفست ندارد"; bad=1; fi
+  done
+  if printf '%s\n' "$list" | grep -qE '^classes[0-9]*\.dex$'; then
+    n=$(printf '%s\n' "$list" | grep -cE '^classes[0-9]*\.dex$')
+    say "  ✓ dex: $n فایل (classes*.dex) — کد کامپایل‌شده داخل فایل است"
+  else say "  ✗ هیچ classes*.dex نیست — روی دستگاه هیچ کدی اجرا نمی‌شود"; bad=1; fi
+
+  # هسته: libbox باید برای هر ABI که gradle promise کرده یک .so داشته باشد
+  if ! printf '%s\n' "$list" | grep -q '^lib/'; then
+    say "  ✗ هیچ lib/<abi>/*.so نیست — این APK هستهٔ تانل (libbox) را ندارد"
+    say "     یعنی اتصال برقرار *به‌نظر* می‌رسد و ترافیک مستقیم می‌رود. تحویل نمی‌دهم."
+    bad=1
+  else
+    for a in $APK_ABIS; do
+      if printf '%s\n' "$list" | grep -q "^lib/$a/.*\.so$"; then
+        n=$(printf '%s\n' "$list" | grep -c "^lib/$a/.*\.so$")
+        say "  ✓ lib/$a/ — $n کتابخانهٔ native"
+      else say "  ✗ lib/$a/ نیست — بیلد برای این ABI انجام نشده (abiFilters را ببینید)"; bad=1; fi
+    done
+    if printf '%s\n' "$list" | grep -q '^lib/arm64-v8a/libmobile\.so$'; then
+      say "  ✓ libmobile.so — نامی که gomobile bind تولید می‌کند"
+    else
+      say "  ⚠ libmobile.so ندیدم؛ اگر sing-box نام را عوض کرده، خودتان این را تأیید کنید:"
+      say "      $(printf '%s\n' "$list" | grep '^lib/arm64-v8a/' | head -3 | tr '\n' ' ')"
+    fi
+  fi
+
+  # پیکربندیِ رندرشده: همان bundle که امضایش در assets است؛ نبودش یعنی اپ روی دستگاه config ندارد
+  if in_list assets/bundle.json; then say "  ✓ assets/bundle.json (پیکربندی امضاشدهٔ رانک‌ها)";
+  else say "  ⚠ assets/bundle.json نیست — «savak bundle» قبل از بیلد اجرا نشده؛ اپ بالا می‌آید ولی رانکی ندارد"; fi
+
+  # badging فقط اطلاعاتی است: aapt2 ممکن است نباشد، و نبودش نباید بیلد را رد کند.
+  # تذکر صداقت: دو شاخهٔ badging و apksigner این تابع روی APK *واقعیِ امضاشده* هنوز اجرا
+  # نشده‌اند — از این محیط هیچ APKی ساخته نمی‌شود (maven.google.com و go.dev بسته‌اند). آن‌چه
+  # اینجا اجرا و اثبات شده سه حالت ساختاری است: بی‌libbox → رد، تک‌ABI → رد، سه‌ABI → قبول.
+  # (--self-test فیکسچرهای zip می‌سازد و همین سه را assert می‌کند.)
+  local AAPT2BIN=${AAPT2:-$(command -v aapt2 || true)}
+  if [ -z "$AAPT2BIN" ]; then AAPT2BIN=$(ls -1 "$SDK"/build-tools/*/aapt2 2>/dev/null | head -1 || true); fi
+  if [ -n "$AAPT2BIN" ] && [ -x "$AAPT2BIN" ]; then
+    if "$AAPT2BIN" dump badging "$apk" >/tmp/savak-badging.txt 2>/dev/null; then
+      say "  ✓ badging: $(grep -m1 -E "^package:" /tmp/savak-badging.txt | tr -d "'")"
+      grep -m1 -q "ir.savak.client" /tmp/savak-badging.txt \
+        && say "  ✓ package = ir.savak.client (همان applicationId)" \
+        || { say "  ✗ package با ir.savak.client نمی‌خواند — این APK مال همین مخزن نیست"; bad=1; }
+    else say "  ⚠ aapt2 dump badging کار نکرد (اطلاعاتی است؛ بر مبنای آن رد نمی‌کنم)"; fi
+  else say "  ⚠ aapt2 پیدا نشد (یا exec-bit ندارد) — فقط ساختار zip سنجیده شد"; fi
+
+  local SIGNER=$(command -v apksigner || ls -1 "$SDK"/build-tools/*/apksigner 2>/dev/null | head -1 || true)
+  if [ -n "$SIGNER" ] && [ -x "$SIGNER" ]; then
+    "$SIGNER" verify "$apk" >/dev/null 2>&1 \
+      && say "  ✓ apksigner verify — امضا معتبر است" \
+      || { say "  ✗ apksigner verify رد کرد — فایل امضای معتبر ندارد (روی دستگاه نصب نمی‌شود)"; bad=1; }
+  else say "  ⚠ apksigner نبود — امضا بررسی *نشد*؛ ادعای «امضاشده» نکنید"; fi
+
+  if [ "$bad" = 1 ]; then
+    say ""
+    say "  رد شد. دلیلِ سخت‌گیری: «APK»ی که dex/مانیفست/لیبرریِ تانل ندارد، برای ابزار"
+    say "  ضدسانسور بدترین خروجی ممکن است — آیکون سبز و ترافیک لو‌رفته. اول libbox را بیلد"
+    say "  کنید (android/tools/build-libbox.sh)، بعد دوباره."
+    return 3
+  fi
+  say "  verify_apk OK — ساختار، dex، سه ABI، و bundle داخل فایل حاضرند"
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────────────────────
 cd "$MOD/.."
 if [ "$MODE" = "docker" ] || [ "$MODE" = "--docker" ]; then docker_hint; exit 0; fi
 if [ "$MODE" = "self-test" ] || [ "$MODE" = "--self-test" ]; then self_test; exit 0; fi
+if [ "$MODE" = "verify-apk" ] || [ "$MODE" = "--verify-apk" ]; then
+  [ "$#" -ge 2 ] || { say "استفاده: bash android/tools/install-toolchain.sh --verify-apk <file.apk>"; exit 2; }
+  verify_apk "$2"; exit $?
+fi
 check_tools
 if [ "$MODE" = "check" ]; then
   say ""

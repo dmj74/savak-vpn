@@ -88,6 +88,19 @@ sha256 است. اگر شبکه بسته باشد، اسکریپت **چیزی ن�
 نمی‌کند** — دقیقاً همان کاری که در یک sandbox بسته باید بکنید. مسیر کانتینر هم هست:
 `bash android/tools/install-toolchain.sh docker`.
 
+## فایل APK: چه چیزی تأیید می‌شود، و چه چیزی رد
+
+`install-toolchain.sh` بعد از بیلد فایل را با `verify_apk` می‌سنجد؛ اگر رد شود
+`savak-debug.apk` **پاک** می‌شود (exit 3) — نه با هشدار تحویل داده می‌شود. معیارش ساختاری است:
+`classes*.dex`، `AndroidManifest.xml`/`resources.arsc`، `lib/<abi>/*.so` **برای هر سه** `abiFilters`
+(یعنی libbox — همان تانل) و `assets/bundle.json`. `aapt2 dump badging` و `apksigner verify` اگر
+حاضر باشند سنجیده می‌شوند و اگر نباشند پیام صریح «بررسی نشد» می‌دهند، نه ادعای مثبت.
+روی هر فایل موجود: `bash android/tools/install-toolchain.sh --verify-apk <file.apk>`.
+هر سه حالت در `--self-test` assert می‌شود (بی‌libbox → رد · تک‌ABI → رد · سه‌ABI → قبول) و با
+mutation آزمایش شد که خودآزمون واقعاً قرمز می‌شود. شاخه‌های badging/apksigner روی APK واقعیِ
+امضاشده هنوز اجرا نشده‌اند — از این محیط هیچ APK واقعی ساخته نمی‌شود (maven.google.com و
+go.dev و dl.google.com در handshakeٔ TLS بسته‌اند)؛ این تنها بخشِ نسنجیدهٔ همین تابع است.
+
 ## آنچه تست‌شده و آنچه نشده
 
 | | وضعیت |

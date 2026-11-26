@@ -33,7 +33,10 @@ class BootReceiver : BroadcastReceiver() {
             val node = bundle.nodes.first()
             val cold = coldStartRung(node.rungs, prefs.getString("mode", "auto") ?: "auto")
                 ?: return
-            BundleHolder.stage(node.rungs)
+            // Boot path must stage the guard too: a tunnel that comes up without its
+            // lockdown config has a kill switch that only works after you open the app.
+            BundleHolder.stage(node.rungs, guard = node.guard, preferred = node.preferredRung, profileLabel = bundle.profileName)
+            bundle.feedGateReason?.let { BundleHolder.lastError = it }
             // `startService` from a boot receiver is the classic Oreo+ crash (the app is in
             // the background, so the system throws instead of starting it) — and a tunnel that
             // is supposed to survive a reboot must become a foreground service the moment it

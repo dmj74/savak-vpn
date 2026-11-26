@@ -13,16 +13,19 @@ open class Context {
     open fun startForegroundService(intent: Intent): ComponentName? = ComponentName()
 
     /** Context.getString(int) and its varargs form — used for the notification labels. */
+    open val packageManager: android.content.pm.PackageManager = android.content.pm.PackageManager()
     open fun getString(resId: Int): String = "res:$resId"
     open fun getString(resId: Int, vararg formatArgs: Any?): String = "res:$resId"
     companion object { const val MODE_PRIVATE = 0 }
 }
 
 class SharedPreferences {
+    fun edit(): Editor = Editor()
     fun getBoolean(key: String, def: Boolean): Boolean = def
     fun getString(key: String, def: String?): String? = def
     class Editor {
         fun putBoolean(key: String, value: Boolean): Editor = this
+        fun putString(key: String, value: String?): Editor = this
         fun apply() {}
     }
 }

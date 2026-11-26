@@ -24,4 +24,6 @@ class NotificationChannel(val id: String, name: CharSequence, val importance: In
 class NotificationManager {
     fun getNotificationChannel(id: String): NotificationChannel? = null
     fun createNotificationChannel(channel: NotificationChannel) {}
+    /** Used by the guard state: a *changed* condition must re-notify, not just setForeground once. */
+    fun notify(id: Int, notification: Notification) {}
 }

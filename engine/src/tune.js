@@ -84,9 +84,31 @@ export const POLICIES = Object.freeze({
     stack: 'system',
     udpRelayMode: 'native', // lossy-but-fast; 'quic' would add a retransmit layer
     congestionControl: 'bbr',
+    lowLatencyDial: true,
     minSwitchGainPct: 25,
     dwellMs: 90_000,
     probeIntervalMs: { wifi: 300_000, cellular: 300_000 },
+  },
+  // «روزمره»: the mode a person actually leaves on all day. It is *not* a weaker auto —
+  // it buys steadiness and a quiet radio instead of peak bytes: fewer probes (battery),
+  // a bigger hysteresis window (no transport change in the middle of a call), one interface
+  // (bonding costs retransmits), and the latency-critical dial timeouts tightened so a dead
+  // path is abandoned in ~1s instead of ~3s.
+  daily: {
+    label: 'روزمره — پایدار و کم‌مصرف',
+    weights: { throughput: 0.26, latency: 0.3, stability: 0.26, evasion: 0.12, cost: 0.06 },
+    pacingHeadroomPct: 0.18,
+    fakeIp: true,
+    bondInterfaces: false,
+    portHopping: 'on-signal',
+    obfs: 'on-signal',
+    stack: 'system',
+    udpRelayMode: 'native',
+    congestionControl: 'bbr',
+    lowLatencyDial: true,
+    minSwitchGainPct: 22,
+    dwellMs: 120_000,
+    probeIntervalMs: { wifi: 420_000, cellular: 600_000 },
   },
   resist: {
     label: 'مقاومت (آخرین راه‌حل)',
@@ -389,11 +411,15 @@ export function tuneFor({ rung, link, client, server, creds, policy, notes = [] 
   const bond = interfaceBonding(client, policy, notes);
   Object.assign(dial, bond ?? {});
   if (link.mtuCap && link.mtuCap < 1420) dial.udp_fragment = true;
-  dial.connect_timeout = link.access === 'cellular' ? '3s' : '2s';
+  dial.connect_timeout = policy.lowLatencyDial
+    ? (link.access === 'cellular' ? '1.2s' : '900ms')
+    : link.access === 'cellular' ? '3s' : '2s';
   // TLS handshake budget lives in the TLS block, not the dialer.
   if (link.access === 'cellular') tls.handshake_timeout = '10s';
   dial.tcp_keep_alive = link.access === 'cellular' ? '2m' : '5m';
-  dial.tcp_keep_alive_interval = link.access === 'cellular' ? '30s' : '75s';
+  dial.tcp_keep_alive_interval = policy.lowLatencyDial
+    ? '15s'
+    : link.access === 'cellular' ? '30s' : '75s';
   if (server.capabilities?.probeResistant) dial.fallback_delay = '300ms';
   out.dial = dial;
 

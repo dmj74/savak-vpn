@@ -9,6 +9,9 @@
     <string name="mode_stealth">پنهان‌کاری</string>
     <string name="mode_game">کم‌تأخیر</string>
     <string name="mode_resist">مقاوم در برابر فیلترینگ</string>
+    <string name="mode_daily">روزمره</string>
+    <string name="guard_title">محافظت فعال — ترافیک مسدود است</string>
+    <string name="guard_text">تونل از دست رفته؛ تا وصل‌شدن دوباره چیزی رد نمی‌شود</string>
     <string name="measure">اندازه‌گیری مسیر</string>
     <string name="connect">وصل شو</string>
     <string name="ladder_title">نردبان پروتکل</string>

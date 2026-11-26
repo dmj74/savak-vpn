@@ -22,6 +22,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -65,6 +66,14 @@ data class UiState(
     val nodeLabel: String = "",
     val signature: String = "",
     val pinnedRung: String? = null,
+    /** Asked for, not proven: the tunnel is only up when the service says the TUN exists. */
+    val starting: Boolean = false,
+    val guardActive: Boolean = false,
+    val killSwitch: Boolean = true,
+    val splitApps: Int = 0,
+    /** What the signed profile asked for, shown next to the switch so a local "off" is a
+     *  decision the user can see they made, not a drift nobody noticed. */
+    val profileWantsKillSwitch: Boolean = false,
 )
 
 /**
@@ -109,9 +118,12 @@ private fun SavakApp(vm: SavakViewModel) {
         ) {
             StatusCard(state)
             ModePicker(state.mode) { vm.setMode(it) }
+            TunnelControlsCard(state) { vm.toggleKillSwitch() }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.measureNow() }, enabled = !state.measuring) { Text("اندازه‌گیری مسیر") }
-                OutlinedButton(onClick = { vm.connect() }) { Text(if (state.connected) "وصل‌شدن دوباره" else "وصل شو") }
+                OutlinedButton(onClick = { vm.connect() }) {
+                    Text(if (state.starting) "در حال برقراری…" else if (state.connected) "وصل‌شدن دوباره" else "وصل شو")
+                }
                 if (state.pinnedRung != null) OutlinedButton(onClick = { vm.unpin() }) { Text("حذف انتخاب دستی") }
             }
             Text("نردبان پروتکل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -132,6 +144,13 @@ private fun StatusCard(state: UiState) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
+            if (state.guardActive) {
+                Text(
+                    "محافظت فعال: تونل از دست رفته و ترافیک عمداً مسدود است — تا وقتی اتصال دوباره برقرار نشود باز نمی‌شود",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            if (state.starting && !state.connected) Text("در حال برقراری تونل…", style = MaterialTheme.typography.bodySmall)
             if (state.nodeLabel.isNotEmpty()) Text("گره: ${state.nodeLabel} · امضا: ${state.signature}")
             if (state.linkLine.isNotEmpty()) Text(state.linkLine, style = MaterialTheme.typography.bodySmall)
             state.error?.let { Text("خطا: $it", color = MaterialTheme.colorScheme.error) }
@@ -147,10 +166,43 @@ private fun ModePicker(current: String, onPick: (String) -> Unit) {
             "speed" to "سرعت",
             "stealth" to "پنهان‌کاری",
             "game" to "گیم",
+            // «روزمره»: the mode a person leaves on all day. Offered because the engine
+            // actually scores differently in it (bigger hysteresis, fewer probes, tighter
+            // dial timeouts) — a chip that only changed a label would be a lie.
+            "daily" to "روزمره",
             "resist" to "مقاوم",
         ).forEach { (id, label) ->
             if (id == current) Button(onClick = { onPick(id) }) { Text(label) }
             else OutlinedButton(onClick = { onPick(id) }) { Text(label) }
+        }
+    }
+}
+
+/**
+ * Kill switch + split tunneling, on the same screen as the connection state: a control that
+ * can be silently off is indistinguishable from one that never worked. The switch writes
+ * [TunnelPrefs] and the service reads that same object, so there is exactly one answer to
+ * "is the guard armed?" — see service/TunnelPrefs.kt for why that has to be one file.
+ */
+@Composable
+private fun TunnelControlsCard(state: UiState, onToggleKillSwitch: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = state.killSwitch, onCheckedChange = { onToggleKillSwitch() })
+                Text("کلید قطع اتصال", fontWeight = FontWeight.Bold)
+            }
+            Text(
+                if (state.killSwitch) "با رفتن تونل، ترافیک مسدود می‌ماند (نشتی ندارد)"
+                else "با رفتن تونل، ترافیک مستقیم از اپراتور می‌رود",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (state.splitApps > 0) {
+                Text("${state.splitApps} برنامه بیرون از تونل نگه داشته می‌شوند", style = MaterialTheme.typography.bodySmall)
+            }
+            if (!state.killSwitch && state.profileWantsKillSwitch) {
+                Text("پروفایل این محافظت را خواسته بود؛ خاموش‌کردنش انتخاب خودتان است", style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
@@ -179,6 +231,14 @@ private fun RungCard(row: RankedRow, state: UiState, enabled: Boolean, onClick: 
  * thrash between transports on noise.
  */
 class SavakViewModel(private val context: Context) {
+
+    companion object {
+        /** Same prefs file as BootReceiver — one name, or the persisted mode is unread. */
+        private const val PREFS = "savak"
+
+        /** Mode names the engine knows (must match engine/src/tune.js POLICIES keys). */
+        val KNOWN_MODES = setOf("auto", "speed", "stealth", "game", "daily", "resist")
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -221,8 +281,12 @@ class SavakViewModel(private val context: Context) {
             return
         }
         bundle = parsed
+        // The signed bundle decides which modes exist at all (policy.mode is what the engine
+        // scored with); a locally persisted mode may only be applied when the bundle agrees.
+        val saved = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("mode", null)
         rungs = parsed.nodes.first().rungs
         selector = Selector(parsed.minSwitchGainPct, parsed.dwellMs)
+        syncControls()
         state.value = state.value.copy(
             nodeLabel = parsed.nodes.first().label,
             signature = when {
@@ -230,7 +294,7 @@ class SavakViewModel(private val context: Context) {
                 parsed.signaturePresent -> "کلید مورد اعتماد نیست"
                 else -> "بدون امضا"
             },
-            mode = parsed.mode,
+            mode = saved?.takeIf { it in KNOWN_MODES } ?: parsed.mode,
             selectedRung = parsed.nodes.first().preferredRung,
         )
     }
@@ -251,6 +315,11 @@ class SavakViewModel(private val context: Context) {
 
     fun setMode(mode: String) {
         state.value = state.value.copy(mode = mode)
+        // Persisted in the file BootReceiver reads: without this the chosen mode is a
+        // session-only decoration and the boot-time cold start picks a rung for a mode
+        // the user stopped using days ago.
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("mode", mode).apply()
         refreshRanking()
     }
 
@@ -279,12 +348,60 @@ class SavakViewModel(private val context: Context) {
         BundleHolder.mtu = mtu
         applyRung(rungId)
         context.startService(Intent(context, SavakVpnService::class.java).setAction(SavakVpnService.ACTION_START))
-        state.value = state.value.copy(connected = true, selectedRung = rungId)
+        // `connected` is not set here, on purpose. The service is the only thing that knows
+        // whether a TUN descriptor exists, and an app that paints itself green before that
+        // answer arrives is exactly how a VPN ends up saying "connected" over a clear link.
+        state.value = state.value.copy(starting = true, connected = false, selectedRung = rungId, error = null)
+        awaitTunnel()
+    }
+
+    /** Poll the service until it reports a state, then stop looking. Bounded by design: a
+     *  tunnel that never comes up must end in a visible error, not an endless spinner. */
+    private fun awaitTunnel() {
+        scope.launch {
+            repeat(30) {
+                val running = SavakVpnService.running
+                val guard = SavakVpnService.guardActive
+                if (running || guard || BundleHolder.lastError != null) {
+                    state.value = state.value.copy(
+                        starting = false,
+                        connected = running,
+                        guardActive = guard,
+                        error = if (running) null else BundleHolder.lastError,
+                    )
+                    return@launch
+                }
+                delay(700)
+            }
+            state.value = state.value.copy(starting = false, connected = false, error = BundleHolder.lastError ?: "تونل برقرار نشد")
+        }
+    }
+
+    fun toggleKillSwitch() {
+        val prefs = ir.savak.client.service.TunnelPrefs.of(context)
+        prefs.setKillSwitch(!prefs.killSwitchEnabled())
+        syncControls()
+        // Turning it off while the tunnel is up is the moment the guarantee disappears: say what
+        // changes instead of quietly flipping a bit.
+        if (!prefs.killSwitchEnabled() && bundle?.nodes?.firstOrNull()?.guard != null) {
+            state.value = state.value.copy(error = "کلید قطع خاموش شد: از این پس با قطع تونل، ترافیک مستقیم می‌رود")
+        }
+    }
+
+    fun syncControls() {
+        val prefs = ir.savak.client.service.TunnelPrefs.of(context)
+        state.value = state.value.copy(
+            killSwitch = prefs.killSwitchEnabled(),
+            splitApps = prefs.splitApps().size,
+            profileWantsKillSwitch = bundle?.killSwitch == true,
+        )
     }
 
     private fun applyRung(rungId: String) {
         val rung = rungs.firstOrNull { it.id == rungId } ?: return
-        BundleHolder.stage(rungs)
+        val node = bundle?.nodes?.firstOrNull()
+        BundleHolder.stage(rungs, guard = node?.guard, preferred = node?.preferredRung, profileLabel = bundle?.profileName)
+        BundleHolder.wantsTun = true
         if (SavakVpnService.running) {
             context.startService(
                 Intent(context, SavakVpnService::class.java)

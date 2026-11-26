@@ -127,6 +127,7 @@ object LadderTable {
         "speed" to doubleArrayOf(0.55, 0.16, 0.14, 0.08, 0.07), // throughput|latency|stability|evasion|cost
         "stealth" to doubleArrayOf(0.14, 0.06, 0.14, 0.6, 0.06), // throughput|latency|stability|evasion|cost
         "game" to doubleArrayOf(0.1, 0.55, 0.25, 0.05, 0.05), // throughput|latency|stability|evasion|cost
+        "daily" to doubleArrayOf(0.26, 0.3, 0.26, 0.12, 0.06), // throughput|latency|stability|evasion|cost
         "resist" to doubleArrayOf(0.08, 0.04, 0.12, 0.7, 0.06), // throughput|latency|stability|evasion|cost
     )
 
@@ -135,6 +136,7 @@ object LadderTable {
         "speed" to setOf("hy2_brutal", "tuic_v5", "vless_reality_tcp", "wg_uot", "anytls", "ss2022", "naive_h3"),
         "stealth" to setOf("hy2_brutal", "vless_reality_tcp", "vless_reality_grpc", "anytls", "naive_h3", "vless_ws_cdn"),
         "game" to setOf("hy2_brutal", "tuic_v5", "vless_reality_tcp", "wg_uot", "ss2022"),
+        "daily" to setOf("hy2_brutal", "tuic_v5", "vless_reality_tcp", "vless_reality_grpc", "wg_uot", "anytls", "ss2022", "naive_h3", "vless_ws_cdn"),
         "resist" to setOf("hy2_brutal", "tuic_v5", "vless_reality_tcp", "vless_reality_grpc", "wg_uot", "anytls", "ss2022", "naive_h3", "vless_ws_cdn", "tor_bridge"),
     )
 }

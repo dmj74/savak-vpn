@@ -66,7 +66,8 @@ cd android && gradle :app:assembleDebug   # یا پروژه را در Android St
 هر پله idea برتر یک ابزار معروف را می‌آورد (Hysteria2، TUIC، Xray Reality، NaïveProxy،
 AnyTLS، Shadowsocks-2022، WireGuard، CDN-fronted VLESS، Tor) و همه در یک `selector`
 رقابت می‌کنند. جزئیات: [docs/smart-evasion.md](docs/smart-evasion.md) ·
-عدد و سرعت: [docs/speed.md](docs/speed.md)
+عدد و سرعت: [docs/speed.md](docs/speed.md) · کنترل‌های تونل (کلید قطع، Split Tunneling،
+حالت «روزمره»، واردکردن فهرست سرور): [docs/tunnel-controls.md](docs/tunnel-controls.md)
 
 > «ترکیب فیلترشکن‌های معروف» = استفاده از بهترین ایدهٔ هر stack متن‌باز، نه wrap کردن
 > سرویس‌های تجاری. بستن Nord/Express/… از نظر ToS ممکن نیست و عملاً ترافیک شما را به یک
@@ -77,10 +78,10 @@ AnyTLS، Shadowsocks-2022، WireGuard، CDN-fronted VLESS، Tor) و همه در 
 | مسیر | چیست |
 |---|---|
 | `engine/` | موتور Node (بدون وابستگی جز `ajv`): مدل پروتکل، tuning، امتیازدهی، تولید config، پروب‌های واقعی، CLI، داشبورد |
-| `engine/test/` | ۷۸ تست: اعتبارسنجی config مقابل **schema رسمی sing-box 1.14.4**، رتبه‌بندی، tuning، پروب‌ها با سوکت واقعی، امضای پروفایل، پیوندهای اشتراک، CLI، داشبورد |
+| `engine/test/` | ۹۵ تست: اعتبارسنجی config مقابل **schema رسمی sing-box 1.14.4**، رتبه‌بندی، tuning، پروب‌ها با سوکت واقعی، امضای پروفایل، پیوندهای اشتراک، CLI، داشبورد |
 | `server/` | `bootstrap.sh` (نصب گره + sysctl + systemd)، `sysctl-savak.conf`، پاسخ‌دهندهٔ اندازه‌گیری |
 | `android/` | منبع Kotlin/Compose کلاینت (منطق انتخاب + امنیت پروفایل + TUN)، با جدول پله‌ای که **از موتور تولید می‌شود** |
-| `docs/` | توضیح دو بخش اصلی: ستیزگی با فیلترینگ، و واقعیتِ سرعت |
+| `docs/` | ستیزگی با فیلترینگ · واقعیتِ سرعت · [کلید قطع، تونل شکافته، حالت روزمره، فید سرور](docs/tunnel-controls.md) · [منشأ APK](docs/apk-provenance.md) |
 
 ## شروع سریع
 

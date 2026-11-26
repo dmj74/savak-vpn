@@ -85,7 +85,10 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
     const ctx = {
       tag: `savak-${rung.id}`,
       server: { ...node, capabilities: node.capabilities ?? {}, ports: node.ports ?? {} },
-      creds: profile.credentials ?? {},
+      // A server may carry its own credentials — that is the whole shape of an imported feed,
+      // where every endpoint has a different password. Falling back to the profile's copy for
+      // all of them would quietly authenticate node B with node A's secret.
+      creds: node.credentials ?? profile.credentials ?? {},
       client: mergedClient,
       policy: resolved,
       profile: { user: profile.user ?? 'savak-user' },
@@ -174,9 +177,17 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
   });
 
   const shareLinks = {};
+  const shareLinkErrors = [];
   for (const row of usable) {
-    const linkStr = shareLinkFor(row.rungId, { tag: `savak-${row.rungId}`, server: node, creds: profile.credentials ?? {}, access: linkObj.access }, row.tuning);
-    if (linkStr) shareLinks[row.rungId] = linkStr;
+    // An imported node can be *configurable* but not *exportable* (no WireGuard keypair,
+    // no CDN front, …). That must not abort the plan: the config the phone runs is already
+    // built, and losing every other node's links to one missing credential is worse.
+    try {
+      const linkStr = shareLinkFor(row.rungId, { tag: `savak-${row.rungId}`, server: node, creds: node.credentials ?? profile.credentials ?? {}, access: linkObj.access }, row.tuning);
+      if (linkStr) shareLinks[row.rungId] = linkStr;
+    } catch (e) {
+      shareLinkErrors.push(`${row.rungId}: ${e.message}`);
+    }
   }
 
   // Which rungs the *node or the device* cannot serve, independent of today's link: the
@@ -192,6 +203,7 @@ export function planForNode({ profile, nodeId, client = {}, policy = {}, link, l
   return {
     node: { id: node.id, label: node.label, address: node.address, region: node.region, protocols: node.protocols },
     mode: resolved.mode,
+    shareLinkErrors,
     link: linkObj,
     ladder: usable.map((r) => ({ rungId: r.rungId, title: r.title, lineage: r.lineage, family: r.family, score: round(r.score), parts: roundParts(r.parts), tuning: r.tuning, notes: r.notes, flags: r.evadeFlags })),
     ranking: ranked.map((r) => ({ rungId: r.rungId, title: r.title, feasible: r.feasible, reason: r.reason, score: round(r.score), explore: round(r.explore) })),

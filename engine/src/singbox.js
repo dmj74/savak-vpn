@@ -136,7 +136,11 @@ export function tunInbound({ client, policy, link, mtu }) {
     tag: 'savak-tun',
     address: [client.ipv4 ?? '172.19.0.1/30', client.ipv6 ?? 'fdfe:dcba:9876::1/126'],
     auto_route: true,
-    strict_route: client.platform === 'android' ? false : true,
+    // strict_route is what stops packets escaping via another interface (or a marked
+    // socket) while the tunnel is up. On Android it costs a per-app rule pass at connect,
+    // so historically it was off there — with killSwitch: 'block' it is ON, because the
+    // whole point of the mode is that nothing leaves unprotected.
+    strict_route: client.platform === 'android' ? policy.killSwitch === 'block' : true,
     mtu: mtu ?? (link.access === 'cellular' ? 1280 : 1420),
     // 'system' keeps TCP in the kernel: no userspace copy per segment. gVisor only
     // wins for exotic UDP shapes, so it is a choice, not a default.
@@ -149,9 +153,25 @@ export function tunInbound({ client, policy, link, mtu }) {
     udp_filtering: 'endpoint_independent',
     udp_nat_max: policy.udpNatMax ?? 3584,
   };
-  if (policy.excludePackages?.length) tun.exclude_package = policy.excludePackages;
-  if (policy.includePackages?.length) tun.include_package = policy.includePackages;
-  if (policy.proxyAppsOnly) tun.route_exclude_address = ['198.18.0.0/15'];
+  const split = policy.split ?? {};
+  // Split tunneling by app: excluded packages get no route into the TUN, so the OS sends
+  // them out normally. `exclude_package` and `include_package` are mutually exclusive in
+  // sing-box, so `includePackages` (proxy-only-apps mode) wins and the exclusion list is
+  // reported back instead of being silently dropped.
+  const excluded = [...new Set([...(policy.excludePackages ?? []), ...(split.excludePackages ?? [])])];
+  if (policy.includePackages?.length) {
+    tun.include_package = policy.includePackages;
+  } else if (excluded.length) {
+    tun.exclude_package = excluded;
+  }
+  const prefixes = [...new Set([
+    ...(policy.proxyAppsOnly ? ['198.18.0.0/15'] : []),
+    ...(split.excludePrefixes ?? []),
+  ])];
+  if (prefixes.length) tun.route_exclude_address = prefixes;
+  // A dead path must be abandoned fast: this is the difference between a 200 ms hitch and
+  // a 3 s stall when the ladder moves to another rung mid-call.
+  if (policy.lowLatencyDial) tun.udp_timeout = link.access === 'cellular' ? '1m' : '2m';
   if (client.platform === 'android' && policy.systemHttpProxy) {
     // Browsers/YouTube on Android obey a system HTTP proxy: for pure-TCP apps that is
     // strictly cheaper than a TUN (no IP encapsulation, no per-packet routing decisions).
@@ -197,6 +217,11 @@ export function routeBlock({ policy, client, link, useBond, fakeIp, final }) {
     // Voice/video latency is better served by an unfragmented path than by padding.
     rules.push({ action: 'route-options', port: [5004, 5005], udp_connect: false });
   }
+  const split = policy.split ?? {};
+  const findProcess = !!split.bypassProcessNames?.length;
+  if (split.bypassPrefixes?.length) rules.push({ action: 'route', outbound: DIRECT, ip_cidr: split.bypassPrefixes });
+  if (split.bypassDomains?.length) rules.push({ action: 'route', outbound: DIRECT, domain_suffix: split.bypassDomains });
+  if (findProcess) rules.push({ action: 'route', outbound: DIRECT, process_name: split.bypassProcessNames });
   return {
     rules,
     final,
@@ -205,6 +230,7 @@ export function routeBlock({ policy, client, link, useBond, fakeIp, final }) {
     // Route-level defaults apply to every dial, which is what we want for a ladder:
     // per-outbound copies would each need the same fields and drift apart.
     ...(useBond ? { default_network_strategy: 'hybrid', default_network_type: ['wifi', 'cellular'], default_fallback_delay: '250ms' } : {}),
+    ...(!useBond && policy.lowLatencyDial ? { default_fallback_delay: '200ms' } : {}),
     rule_set: [
       {
         type: 'inline',
@@ -213,7 +239,9 @@ export function routeBlock({ policy, client, link, useBond, fakeIp, final }) {
       },
       ...evasionRuleSets(policy.evasionDomains),
     ],
-    find_process: false,
+    // Resolving a UID→package name per packet is not free; only pay for it when the user
+    // actually asked for per-app bypass by process name.
+    find_process: findProcess,
   };
 }
 
@@ -473,3 +501,38 @@ export function serverConfig({ profile, node, server, creds, policy, ladder, opt
 }
 
 export { SEL, DIRECT, BLOCK, FAMILY };
+
+/* ------------------------------------------------------------------ *
+ * Kill-switch guard config
+ * ------------------------------------------------------------------ */
+
+/**
+ * The lockdown config the app swaps in when the tunnel dies but the VPN interface must
+ * stay up. It is deliberately *not* "stop the service": tearing the interface down hands
+ * the socket back to the carrier network, which is exactly the leak a kill switch exists
+ * to prevent, and it is also why most clients re-dial while traffic is quietly flowing.
+ *
+ * Everything in it is `block`: no `savak-direct` outbound exists here, so no rule can
+ * route anything to the plain network — not even a DNS lookup. The phone stays usable for
+ * the reconnect because the *next* config is started from the app process, not from inside
+ * this one, and the rung configs carry `cache_file.store_dns` so re-resolution is usually
+ * already warm.
+ *
+ * Same TUN shape as the live config on purpose: addresses/MTU/split settings must not
+ * change when entering guard, or Android would tear down and rebuild the interface and
+ * briefly route everything clear-text in the process.
+ */
+export function guardClientConfig({ client, policy = {}, link = {}, mtu } = {}) {
+  const guardPolicy = { ...policy, killSwitch: 'block', logLevel: 'error' };
+  return {
+    log: { level: 'error', timestamp: false },
+    inbounds: [tunInbound({ client, policy: guardPolicy, link, mtu })],
+    outbounds: [{ type: 'block', tag: BLOCK }],
+    route: {
+      rules: [],
+      final: BLOCK,
+      auto_detect_interface: true,
+      find_process: false,
+    },
+  };
+}

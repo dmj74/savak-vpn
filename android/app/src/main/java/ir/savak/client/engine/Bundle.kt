@@ -36,6 +36,8 @@ data class Node(
     val scoringInputs: Map<String, ScoringInputs> = emptyMap(),
     /** rung → reason, for rungs the node/device cannot serve regardless of the link. */
     val capabilityBlocked: Map<String, String> = emptyMap(),
+    /** Pre-rendered lockdown config (TUN up, everything `block`). Null = no kill switch. */
+    val guard: String? = null,
 )
 
 data class ScoringInputs(
@@ -58,6 +60,14 @@ data class Bundle(
     val dwellMs: Long,
     val nodes: List<Node>,
     val signaturePresent: Boolean,
+    /** Echoed by the engine so the UI and the service act on one answer, not two guesses. */
+    val killSwitch: Boolean = false,
+    val splitApps: List<String> = emptyList(),
+    val lowLatency: Boolean = false,
+    /** `profile.user`, echoed: the notification is about a profile, not about the app. */
+    val profileName: String? = null,
+    /** Set when the engine refused the bundle (an unverified feed). The UI must show this. */
+    val feedGateReason: String? = null,
 ) {
     fun node(id: String?): Node = nodes.firstOrNull { it.id == id } ?: nodes.first()
 }
@@ -108,6 +118,7 @@ fun parseBundle(text: String): Bundle {
                 if (w == null) emptyList() else (0 until w.length()).map { w.getString(it) }
             },
             scoringInputs = inputs,
+            guard = n.optJSONObject("guard")?.toString(),
         )
     }
     val policy = o.optJSONObject("policy") ?: JSONObject()
@@ -120,6 +131,13 @@ fun parseBundle(text: String): Bundle {
         dwellMs = policy.optLong("dwellMs", 45_000L),
         nodes = nodes,
         signaturePresent = o.optJSONObject("signature") != null,
+        killSwitch = policy.optString("killSwitch", "") == "block",
+        splitApps = policy.optJSONArray("splitApps")?.let { a -> (0 until a.length()).map { a.getString(it) } }
+            ?: policy.optJSONObject("split")?.optJSONArray("excludePackages")?.let { a -> (0 until a.length()).map { a.getString(it) } }
+            ?: emptyList(),
+        lowLatency = policy.optBoolean("lowLatencyDial", false),
+        profileName = o.optString("profileName").takeIf { it.isNotEmpty() && it != "null" },
+        feedGateReason = o.optJSONObject("feedGate")?.optString("reason")?.takeIf { it.isNotEmpty() },
     )
 }
 

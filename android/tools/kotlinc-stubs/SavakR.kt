@@ -18,6 +18,9 @@ object R {
         const val error_signature = 12
         const val error_no_bundle = 13
         const val perm_denied = 14
+        const val mode_daily = 18
+        const val guard_title = 19
+        const val guard_text = 20
         const val measure = 15
         const val connect = 16
         const val ladder_title = 17

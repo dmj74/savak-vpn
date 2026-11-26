@@ -605,6 +605,8 @@ const MODE_ALLOW = Object.freeze({
   speed: ['hy2_brutal', 'tuic_v5', 'wg_uot', 'vless_reality_tcp', 'anytls', 'ss2022', 'naive_h3'],
   stealth: ['vless_reality_tcp', 'vless_reality_grpc', 'hy2_brutal', 'anytls', 'naive_h3', 'vless_ws_cdn'],
   game: ['wg_uot', 'tuic_v5', 'hy2_brutal', 'vless_reality_tcp', 'ss2022'],
+  // daily: everything auto allows except Tor — a 3-RTT circuit is never "daily".
+  daily: RUNGS.filter((r) => r.id !== 'tor_bridge').map((r) => r.id),
   resist: RUNGS.map((r) => r.id),
   auto: RUNGS.filter((r) => r.id !== 'tor_bridge').map((r) => r.id),
 });

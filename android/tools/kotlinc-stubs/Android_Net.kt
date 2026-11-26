@@ -33,15 +33,33 @@ open class VpnService : android.content.Context() {
     open fun onRevoke() {}
     open fun stopSelf() {}
     open fun stopForeground(flags: Int) {}
+    /** Keeps a socket out of the VPN — the call that makes the tunnel's own dialing work. */
+    open fun protect(fd: Int): Boolean = true
     open fun startForeground(id: Int, notification: android.app.Notification) {}
 
+    /**
+     * The three app-scoping calls are the split-tunnel and strict-route mechanisms, so the
+     * stub carries them with their real one-sided constraint: a Builder accepts *either*
+     * allowedApplication or disallowedApplication, never both (Android throws otherwise).
+     */
     class Builder {
+        var allowedCount = 0; private set
+        var disallowedCount = 0; private set
         fun setSession(name: String): Builder = this
         fun setMtu(mtu: Int): Builder = this
         fun addAddress(cidr: String): Builder = this
         fun addRoute(cidr: String): Builder = this
         fun addDnsServer(addr: String): Builder = this
         fun setBlocking(blocking: Boolean): Builder = this
+        fun setUnderlyingNetworks(networks: Array<Network?>?): Builder = this
+        fun addAllowedApplication(pkg: String): Builder = apply {
+            check(disallowedCount == 0) { "addAllowedApplication and addDisallowedApplication are mutually exclusive" }
+            allowedCount++
+        }
+        fun addDisallowedApplication(pkg: String): Builder = apply {
+            check(allowedCount == 0) { "addAllowedApplication and addDisallowedApplication are mutually exclusive" }
+            disallowedCount++
+        }
         fun establish(): android.os.ParcelFileDescriptor? = android.os.ParcelFileDescriptor()
     }
 

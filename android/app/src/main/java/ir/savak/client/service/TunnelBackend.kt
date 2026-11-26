@@ -46,14 +46,36 @@ class LibBoxBackend(private val context: Context) : TunnelBackend {
         val checked = runCatching { LibBoxReflect.checkConfig(text) }
         if (checked.isFailure) return TunnelBackend.Result(false, "config rejected by libbox: ${checked.exceptionOrNull()?.message}")
         val hasTun = runCatching { LibBoxReflect.hasTunInbound(text) }.getOrDefault(true)
+        if (hasTun && SavakPlatformBridge.platformInterfaceClass() == null) {
+            // The config asks for a TUN and the linked AAR cannot be handed the object that
+            // creates one. Starting anyway would mean "running, unprotected, looks connected".
+            return TunnelBackend.Result(
+                false,
+                "libbox exposes no PlatformInterface: the app cannot supply a TUN, so it will not report a tunnel",
+            )
+        }
         return runCatching {
             LibBoxReflect.startService(context, text, hasTun)
+            if (hasTun && !SavakPlatformBridge.tunEstablished) {
+                // openTun was never called, or it failed. Either way there is no interface.
+                val why = SavakPlatformBridge.lastError ?: "sing-box did not request a TUN from the app"
+                return@runCatching TunnelBackend.Result(false, "no tunnel interface: $why")
+            }
             TunnelBackend.Result(true, if (hasTun) "tun" else "proxy-only")
         }.getOrElse { TunnelBackend.Result(false, it.message) }
     }
 
     override fun reload(config: File) = start(config, 0)
 
+    /**
+     * Stops the core, and deliberately does *not* close the TUN.
+     *
+     * Whoever owns the interface owns the routes. Closing the descriptor here would tear the
+     * interface down mid-transition — and the instant that happens, every socket on the device
+     * is handed back to the carrier network. That is the exact window the guard state exists to
+     * avoid, so the fd is released only by `SavakVpnService.stopEverything()`, i.e. when the
+     * user (or Android) truly ends the tunnel.
+     */
     override fun stop() {
         runCatching { LibBoxReflect.stopService() }
     }
@@ -98,8 +120,16 @@ object LibBoxReflect {
 
     fun startService(context: Context, json: String, hasTun: Boolean) {
         setup(context)
-        val svc = cls("Service")
-        svc.getMethod("startOrReloadService", String::class.java).invoke(svcInstance(context), json)
+        val instance = svcInstance(context)
+        val svc = instance.javaClass
+        if (hasTun) {
+            val platform = SavakPlatformBridge.newPlatformInterface()
+                ?: error("no PlatformInterface proxy (no VpnService bound?) — refusing to start without a TUN path")
+            val setter = svc.methods.firstOrNull { it.name == "setPlatformInterface" && it.parameterCount == 1 }
+                ?: error("the linked libbox Service has no setPlatformInterface(...): the AAR cannot be given a TUN factory")
+            setter.invoke(instance, platform)
+        }
+        svc.getMethod("startOrReloadService", String::class.java).invoke(instance, json)
     }
 
     fun stopService() {
@@ -159,6 +189,8 @@ class SubprocessBackend(private val workDir: File, private val binary: String = 
     }
 
     override fun stop() {
+        // Same rule as the libbox path: destroy the core, leave the interface alone. The
+        // subprocess is not what owns the TUN on Android — the VpnService is.
         process?.destroy()
         process = null
     }

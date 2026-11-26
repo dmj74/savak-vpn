@@ -11,6 +11,11 @@
  *   savak validate    <file.json>
  *   savak profile     [--out profile.json] [--sign]       (Ed25519 keypair + signed example)
  *   savak bundle      [--out savak-bundle.json] [--live host] [--only a,b]
+ *   savak feed        --file links.txt [--out feed-profile.json] [--require-reality]
+ *                     [--max 150]                            (import free/community links
+ *                                                             as UNVERIFIED, never trusted)
+ *   savak bundle      ... [--kill-switch [block|off]] [--split-apps a,b]
+ *                     [--split-domains x.ir] [--split-prefixes 10.0.0.0/8]
  *   savak init        --hostname host --node id [--brutal] [--outDir dir]  (profile+keys+server.json)
  *   savak keys        [--json]                              (fresh credentials for a node)
  *   savak serve       [--port 8080]                        (dashboard)
@@ -71,6 +76,17 @@ function policyFrom(args) {
   for (const k of ['allowLegacy', 'bondInterfaces', 'portHopping', 'fakeIp', 'controlApi', 'stack']) {
     if (args[k] !== undefined) p[k] = args[k] === 'true' || args[k] === true ? true : args[k] === 'false' ? false : args[k];
   }
+  // Tunnel controls. `--kill-switch` with no value means "on" (block-on-drop); `off`
+  // disables it, and that choice is recorded in the bundle so the UI can warn.
+  if (args.killSwitch !== undefined) p.killSwitch = args.killSwitch === 'off' || args.killSwitch === false ? null : String(args.killSwitch) === 'block' || args.killSwitch === true ? 'block' : String(args.killSwitch);
+  const list = (v) => String(v).split(',').map((x) => x.trim()).filter(Boolean);
+  const split = {};
+  if (args.splitApps) split.excludePackages = list(args.splitApps);
+  if (args.splitDomains) split.bypassDomains = list(args.splitDomains);
+  if (args.splitPrefixes) split.bypassPrefixes = list(args.splitPrefixes);
+  if (args.splitProcess) split.bypassProcessNames = list(args.splitProcess);
+  if (Object.keys(split).length) p.split = split;
+  if (args.allowUnverifiedFeed) p.allowUnverifiedFeed = true;
   return p;
 }
 
@@ -122,7 +138,7 @@ async function main() {
   if (!argv.length || argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help') {
     process.stdout.write(
       `savak — smart evasion ladder (sing-box 1.14)\n\n` +
-        `  savak plan     [--profile f.json] [--node fra-1] [--mode auto|speed|stealth|game|resist]\n` +
+        `  savak plan     [--profile f.json] [--node fra-1] [--mode auto|speed|stealth|game|daily|resist]\n` +
         `                 [--access wifi|cellular] [--censor ${Object.keys(CENSOR_PROFILES).join('|')}]\n` +
         `                 [--rtt ms] [--loss %] [--bw mbps] [--root] [--all] [--links]\n` +
         `                 [--out client.json] [--validate]\n` +
@@ -299,6 +315,34 @@ async function main() {
       if (!bundle.ok) process.exitCode = 4;
       break;
     }
+    case 'feed': {
+      const { ingestFeed, feedToProfile, describeFeed } = await import('./feed.js');
+      const fs = await import('node:fs/promises');
+      const text = args.file ? await fs.readFile(String(args.file), 'utf8') : args.url ? await (await fetch(String(args.url))).text() : '';
+      if (!text.trim()) {
+        process.stdout.write('feed: nothing to import — pass --file links.txt (or --url, and note that fetching is up to you)\n');
+        process.exitCode = 2;
+        break;
+      }
+      const feed = ingestFeed({
+        text,
+        maxNodes: Number(args.max ?? 150),
+        requireReality: !!args.requireReality,
+        allowInsecureTls: !!args.allowInsecure,
+      });
+      process.stdout.write(`${describeFeed(feed)}\n`);
+      if (args.out) {
+        const profile = feedToProfile(feed, { name: args.name ?? 'imported-feed' });
+        await fs.writeFile(String(args.out), `${JSON.stringify(profile, null, 2)}\n`);
+        process.stdout.write(
+          `→ ${args.out}: ${profile.servers.length} server(s), signature=null\n` +
+            `  it is a feed profile: buildBundle refuses it until you pass --allow-unverified-feed,\n` +
+            `  and nothing routes to an unmeasured exit before the probe gate has run.\n`,
+        );
+      }
+      break;
+    }
+
     case 'init': {
       const { initProfile, serverConfigFor } = await import('./init.js');
       const outDir = args.outDir ?? '.';

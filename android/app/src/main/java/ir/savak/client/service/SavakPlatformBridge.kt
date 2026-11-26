@@ -212,7 +212,12 @@ object SavakPlatformBridge {
                 }
                 (installed - skip).forEach { builder.addAllowedApplication(it) }
             }
-            excludedApps.isNotEmpty() -> excludedApps.forEach { builder.addDisallowedApplication(it) }
+            // Not `excludedApps` alone: the user may have added an app locally after the
+            // bundle was built (the UI writes TunnelPrefs, the engine could not know). The
+            // strict branch above already unions the two; without this line the same switch
+            // would work in one mode and silently do nothing in the other.
+            excludedApps.isNotEmpty() || prefs.splitApps().isNotEmpty() ->
+                (excludedApps + prefs.splitApps()).distinct().forEach { builder.addDisallowedApplication(it) }
         }
         // No proxy ARP, no captive-portal escape: while the interface exists, nothing else
         // may carry traffic. This is the Android-native half of the kill switch and it costs

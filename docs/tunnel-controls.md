@@ -188,10 +188,16 @@ risk      1/2 without a pinned Reality key — they can be identified and are no
   مسیر همیشگی‌اند: `bash android/tools/install-toolchain.sh` روی دستگاه شما، یا فعال‌کردن
   `ci/apk-only.yml`. برای سرور: `server/bootstrap.sh` (sing-box 1.14.4، Reality، پورت‌های
   شناخته‌شده) و بعد `savak init` → `savak bundle` → فایل امضاشده داخل assets.
-- **روی دستگاه اجرا نشده.** آنچه سبز است: `npm test` موتور (۹۲/۹۲)، چهار پایهٔ
-  `typecheck.sh` (از جمله کامپایل kotlinc ماژول‌های engine/security/service با استاب‌های
-  Android)، `aapt2 compile` منابع، `check:generated`، و `--self-test`. آنچه **سنجیده نشده**:
-  `MainActivity.kt` در مجموعهٔ کامپایل typecheck نیست (استاب Compose وجود ندارد) — تغییرات UI
-  این دور فقط با `res-check.py` (ارجاع‌های R) و بازبینی چشمی دیده شده‌اند؛ نام‌های
+- **روی دستگاه اجرا نشده.** آنچه سبز است: `npm test` موتور (۹۵/۹۵)، چهار پایهٔ
+  `typecheck.sh` (کامپایل kotlinc روی ۱۲ فایل ماژول با استاب‌های Android **و حالا خودِ
+  `MainActivity.kt`** با استاب‌های `androidx/*`)، `aapt2 compile` منابع، `check:generated`،
+  و `--self-test`. پای UI بی‌مصرف نبود: همان اول `Bundle.minSwitchGainPct` را که با `optInt`
+  خوانده می‌شد و به `Selector(minSwitchGainPct: Double)` می‌رفت گرفت (`argument type mismatch:
+  actual Int, expected Double`) — یعنی باگ «اولین بیلد Gradle» یکی کم شد. اینکه چک
+  بی‌مصرف نیست با mutation هم سنجیده شد: `splitApps()` → `splitPackages()` → `exit=1` با
+  `unresolved reference 'splitPackages' on receiver of type 'TunnelPrefs'`، بازگرداندن → `exit=0`.
+  آنچه هنوز **سنجیده نشده**: امضای خودِ androidx/Compose (پلاگین Compose و runtime واقعی در
+  کار نیستند — بدفهمیدن آپیک‌آن‌های آنها اینجا رد می‌شود و در Gradle می‌گیرد)، نام‌های
   `setPlatformInterface` / `startOrReloadService` وابسته به AAR است و هنوز هیچ‌جا لینک نشده؛
-  و هیچ بسته‌ای روی موبایل نصب نشده. اولین بیلد واقعی، اولین کامپایل واقعی این فایل‌هاست.
+  و هیچ بسته‌ای روی موبایل نصب نشده. اولین بیلد واقعی، اولین لینک/اجرای واقعی این کد است —
+  کامپایل شدنش دیگر به آن بیلد موکوت نیست، و این دقیقاً همان چیزی است که استاب‌ها برایش ساخته شدند.

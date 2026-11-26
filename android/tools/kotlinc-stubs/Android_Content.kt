@@ -14,6 +14,8 @@ open class Context {
 
     /** Context.getString(int) and its varargs form — used for the notification labels. */
     open val packageManager: android.content.pm.PackageManager = android.content.pm.PackageManager()
+    /** MainActivity hands this to the ViewModel: the ViewModel must not hold an Activity. */
+    open val applicationContext: Context get() = this
     open fun getString(resId: Int): String = "res:$resId"
     open fun getString(resId: Int, vararg formatArgs: Any?): String = "res:$resId"
     companion object { const val MODE_PRIVATE = 0 }

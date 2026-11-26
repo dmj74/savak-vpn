@@ -56,7 +56,13 @@ data class Bundle(
     val issuer: String,
     val user: String,
     val mode: String,
-    val minSwitchGainPct: Int,
+    /**
+     * Double, not Int: `Selector.minSwitchGainPct` is a Double and the engine is free to emit a
+     * fractional gain. Parsed with `optDouble` so both `15` and `15.5` are accepted — and this
+     * being a Double is the reason the typecheck leg exists: with `optInt` the app compiled by
+     * reading and failed by compiler.
+     */
+    val minSwitchGainPct: Double,
     val dwellMs: Long,
     val nodes: List<Node>,
     val signaturePresent: Boolean,
@@ -127,7 +133,7 @@ fun parseBundle(text: String): Bundle {
         issuer = o.optString("issuer", ""),
         user = o.optString("user", ""),
         mode = policy.optString("mode", "auto"),
-        minSwitchGainPct = policy.optInt("minSwitchGainPct", 15),
+        minSwitchGainPct = policy.optDouble("minSwitchGainPct", 15.0),
         dwellMs = policy.optLong("dwellMs", 45_000L),
         nodes = nodes,
         signaturePresent = o.optJSONObject("signature") != null,

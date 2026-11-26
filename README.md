@@ -16,7 +16,7 @@ https://doo.st/1406
 | صفحهٔ Release (توضیح نسخه + فایل‌ها) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ آماده |
 | **APK دیباگ** | بعد از یک‌بار فعال کردن pipeline: `cp ci/android-apk.yml .github/workflows/` | ⚙️ یک خط از شما |
 | `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود — کلیدهای گره داخلش است |
-| منطق اندروید: کامپایل + هم‌ارزی + امضا (بدون SDK) | `bash android/tools/typecheck.sh` | ✅ همین‌جا اجرا شد — نه فقط نوشته |
+| منطق اندروید + UI: کامپایل + هم‌ارزی + امضا (بدون SDK) | `bash android/tools/typecheck.sh` | ✅ همین‌جا اجرا شد — نه فقط نوشته |
 
 **چرا APK را نساختیم و تحویل ندادیم؟** بیلد اندروید به Android SDK + JDK 17 + Go (برای AARِ
 `libbox`) نیاز دارد و هیچ‌کدام در محیطی که این کد در آن نوشته شد نبود؛ `dl.google.com` و
@@ -133,9 +133,10 @@ sudo bash server/bootstrap.sh --hostname fra1.example.com --node fra-1 --apply
   ولی `kotlinc` روی JVM اجرا شد و نتیجه روشن است: ۹ فایل ماژول کامپایل می‌شوند، ۸۰ ردیف
   رتبه‌بندیِ اپ بیت‌به‌بیت با اعداد موتور می‌خواند، و امضای یک پروفایل واقعیِ `savak init`
   با canonical JSON خودِ اپ تأیید می‌شود (و سه حالت دست‌کاری/کلید ناشناخته/بدون کلید رد).
-  این تست‌ها «نوشته» نشده‌اند — خروجی‌شان در `android/README.md` است. رابط Compose
-  (`MainActivity.kt`) و مرز `libbox` تنها بخش‌هایی هستند که Gradle/CI باید بسنجد؛ رفتار روی
-  دستگاه را هم خودتان (`android/README.md`).
+  این تست‌ها «نوشته» نشده‌اند — خروجی‌شان در `android/README.md` است. `MainActivity.kt` هم از
+  این دور با استاب‌های `androidx/*` **کامپایل می‌شود** (و همان اول یک `Int`→`Double` را گرفت که
+  فقط در Gradle می‌ترکید)؛ آنچه هنوز فقط در Gradle/CI سنجیده می‌شود مرز `libbox` (نام سمبل‌های
+  AAR) و معناهای واقعی Compose است، و رفتار روی دستگاه را خودتان باید بسنجید.
 - ECH و `spoof` (نیازمند روت) عمداً پیاده نشده‌اند؛ `docs/smart-evasion.md` توضیح می‌دهد چرا.
 - Tor فقط به‌عنوان طبقهٔ آخر در جدول است؛ config آن نیاز به bridge زنده دارد که این موتور
   برای شما نمی‌سازد.

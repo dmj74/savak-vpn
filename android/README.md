@@ -111,13 +111,14 @@ go.dev و dl.google.com در handshakeٔ TLS بسته‌اند)؛ این تنه�
 
 | | وضعیت |
 |---|---|
-| کامپایل شدن کد ماژول (۹ فایل: `engine/` `security/` `service/` `BootReceiver`) | ✅ اجرا شده با `kotlinc` روی JVM، بدون Android SDK |
+| کامپایل شدن کد ماژول (۱۲ فایل: `engine/` `security/` `service/` + `MainActivity` + `BootReceiver`) | ✅ اجرا شده با `kotlinc` روی JVM، بدون Android SDK |
 | امتیازدهی و رتبه‌بندی پله‌ها روی ۱۰ سناریوی مسیر (۸۰ ردیف) | ✅ `LadderParityCheck` روی fixture تولیدشده از موتور، **اجرا شده** |
 | اینکه خودِ چک «می‌تواند fail شود» | ✅ `checkDetectsMutation` — یک عددِ عوض‌شده باید گزارش شود |
 | canonical JSON + Ed25519 روی پروفایل امضاشدهٔ `savak init` | ✅ تأیید شد؛ دست‌کاری آدرس، کلید ناشناخته و فهرست خالی → رد |
 | هیسترزیس تعویض (dwell، حداقل سود، cooldown) | ✅ همان fixture، به‌علاوه `test/selector.test.js` در موتور |
 | اعتبارسنجی پیکربندی‌ها مقابل schema رسمی sing-box 1.14.4 | ✅ در موتور، هنگام build باندل |
-| `MainActivity.kt` (Compose) و مرز `libbox` (AAR) | ❌ عمداً stub نشد؛ اولین کامپایل واقعی‌شان در CI/Gradle است |
+| `MainActivity.kt` (Compose) | ✅ **حالا کامپایل می‌شود** — با استاب‌های `androidx/*` در `tools/kotlinc-stubs/` و `kotlinx-coroutines-core-jvm.jar` کنار خودِ کامپایلر. همین پا یک باگ واقعی گرفت: `Bundle.minSwitchGainPct` با `optInt` به `Selector(minSwitchGainPct: Double)` پاس می‌شد («argument type mismatch: actual Int, expected Double»). مرز `libbox` (AAR) هنوز ❌ — اولین لینک واقعی‌اش در Gradle/CI است |
+| آنچه پای UI ثابت نمی‌کند | امضای خودِ androidx (نه پلاگین Compose در کار است، نه runtime واقعی) و رفتار بازساخت/رکامپوزیشن؛ یعنی بدفهمیدن *آپیک‌آن‌های theirs* اینجا رد می‌شود و در Gradle می‌گیرد |
 | رفتار روی دستگاه واقعی: TUN، DoH، battery optimization، rebind | ❌ هیچ‌وقت روی گوشی اجرا نشده — باید بسنجید |
 
 ### اجرای همین چک بدون Gradle
@@ -126,7 +127,7 @@ go.dev و dl.google.com در handshakeٔ TLS بسته‌اند)؛ این تنه�
 JAVA_HOME=/path/to/jdk-17 bash android/tools/typecheck.sh
 ```
 
-چهار پایه است: (۱) `tools/res-check.py` — گراف ارجاع‌ها بین `R.*`، `res/`، `AndroidManifest.xml`
+چهار پایه است (و پای کامپایل، خودش دو پا: منطق ماژول + پای UI): (۱) `tools/res-check.py` — گراف ارجاع‌ها بین `R.*`، `res/`، `AndroidManifest.xml`
 و `build.gradle.kts`؛ (۲) `aapt2 compile` روی همهٔ `res/` — با **خودِ ابزار واقعی اندروید**،
 نسخهٔ `2.19-7832930`، که از PyPI می‌آید (`pip install aapt2`؛ فقط `chmod +x` لازم دارد)؛
 (۳) هم‌ارزی امتیازدهی با fixture تولیدشده از موتور؛ (۴) تأیید امضای پروفایلی که خودِ

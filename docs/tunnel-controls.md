@@ -188,7 +188,7 @@ risk      1/2 without a pinned Reality key — they can be identified and are no
   مسیر همیشگی‌اند: `bash android/tools/install-toolchain.sh` روی دستگاه شما، یا فعال‌کردن
   `ci/apk-only.yml`. برای سرور: `server/bootstrap.sh` (sing-box 1.14.4، Reality، پورت‌های
   شناخته‌شده) و بعد `savak init` → `savak bundle` → فایل امضاشده داخل assets.
-- **روی دستگاه اجرا نشده.** آنچه سبز است: `npm test` موتور (۹۵/۹۵)، چهار پایهٔ
+- **روی دستگاه اجرا نشده.** آنچه سبز است: `npm test` موتور (۱۰۴/۱۰۴)، چهار پایهٔ
   `typecheck.sh` (کامپایل kotlinc روی ۱۲ فایل ماژول با استاب‌های Android **و حالا خودِ
   `MainActivity.kt`** با استاب‌های `androidx/*`)، `aapt2 compile` منابع، `check:generated`،
   و `--self-test`. پای UI بی‌مصرف نبود: همان اول `Bundle.minSwitchGainPct` را که با `optInt`

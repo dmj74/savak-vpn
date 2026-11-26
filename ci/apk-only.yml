@@ -5,13 +5,26 @@ name: apk
 # check and the signed release) — use that one for normal CI, this one when you only want the
 # binary. Nothing here invents a keystore: the debug APK is signed with the standard Android
 # debug key, which is exactly what makes it installable and not distributable.
+#
+# BUILD_APK_WITH_DEMO_BUNDLE (default true) runs `savak app-assets` first. Without it the APK
+# builds fine and the app opens on "باندل موجود نیست": a bundle is signed per node, so it is not
+# a committed artifact. A throwaway test build wants one; a release build must not ship a profile
+# whose private key lives in CI logs — set the flag to false for anything real.
 
 on:
   workflow_dispatch:
     inputs:
       ref: { description: 'branch to build', default: 'main', required: false }
+      with_demo_bundle:
+        description: 'generate a throwaway signed bundle into assets first'
+        type: boolean
+        default: true
   push:
     tags: ['v*']
+    # Handy while the port is still moving: a branch push that carries a bundle-shaped change
+    # gets an APK without waiting for a tag. Harmless when nothing matches — the trigger is a
+    # no-op unless the branch name is on the list.
+    branches: ['arena/**']
 
 permissions:
   contents: write
@@ -20,11 +33,19 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env: { SINGBOX_VERSION: 1.14.4 }
+    env:
+      SINGBOX_VERSION: 1.14.4
+      # Only a manual run may opt into a throwaway bundle. Empty on tag runs, which is the
+      # answer we want there: a tag build is the one attached to a release, and a release must
+      # not ship a profile whose signing key was minted inside CI.
+      BUILD_APK_WITH_DEMO_BUNDLE: ${{ github.event_name == 'workflow_dispatch' && inputs.with_demo_bundle }}
     steps:
       - uses: actions/checkout@v4
+        with: { ref: '${{ inputs.ref || github.ref }}' }
       - uses: actions/setup-go@v5
         with: { go-version: '1.24' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: engine/package-lock.json }
       - uses: android-actions/setup-android@v3
         with:
           packages: 'ndk;27.0.12077973 platforms;android-35 build-tools;35.0.0 platform-tools'
@@ -33,6 +54,23 @@ jobs:
         with: { distribution: 'temurin', java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.10' }
+
+      # The three files the app reads at startup: assets/profile.json (signed), assets/bundle.json
+      # (validated per-rung configs) and security/TrustedKeys.kt (the key that must verify them).
+      - name: demo bundle into assets
+        if: env.BUILD_APK_WITH_DEMO_BUNDLE == 'true'
+        run: |
+          npm ci --prefix engine
+          # app-assets validates every embedded config against the sing-box schema itself, so a
+          # green step here means the assets the phone will read are ones the validator accepted.
+          node engine/src/cli.js app-assets --androidDir android --hostname "demo-${GITHUB_RUN_ID}.savak.example" --mode daily
+
+      - name: refuse a silent skip
+        run: |
+          if [ "$BUILD_APK_WITH_DEMO_BUNDLE" = "true" ] && [ ! -f android/app/src/main/assets/bundle.json ]; then
+            echo "::error::app-assets said it wrote a bundle and there is none" >&2; exit 1
+          fi
+
       - run: export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973" && bash android/tools/build-libbox.sh
       - name: debug APK
         run: cd android && gradle --no-daemon :app:assembleDebug --stacktrace

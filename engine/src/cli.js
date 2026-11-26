@@ -149,6 +149,11 @@ async function main() {
         `  savak keys     fresh credentials for a node (uuid, hy2, tuic, anytls, ss2022, reality, wg)\n` +
         `  savak validate <file.json>  check any config against the official schema\n` +
         `  savak ladder   print the catalogue and where each rung came from\n` +
+        `  savak feed     --file links.txt  import a community list as an UNVERIFIED profile\n` +
+        `  savak app-assets --androidDir android --hostname host  the three files an APK needs\n` +
+        `                 (assets/profile.json, assets/bundle.json, security/TrustedKeys.kt)\n` +
+        `                 --dryRun to preview · --force to replace a hand-written anchor ·\n` +
+        `                 no server private key ever enters the APK (it refuses instead)\n` +
         `  savak serve    [--port 8080] the dashboard\n\n`,
     );
     return;
@@ -211,6 +216,28 @@ async function main() {
     }
     case 'server': {
       const profile = await readProfile(args);
+      // keys.json holds the node's private material. Auto-discovered beside the profile
+      // because the alternative is an operator reading a stack trace to learn where their own
+      // file went; --keys overrides it.
+      let creds = profile.credentials ?? {};
+      {
+        const fs = await import('node:fs/promises');
+        const keysPath = args.keys ?? (args.profile ? `${args.profile.replace(/profile\.json$/, 'keys.json')}` : 'keys.json');
+        try {
+          const k = JSON.parse(await fs.readFile(keysPath, 'utf8'));
+          if (k?.credentials) {
+            // Nested on purpose: `wg` is an object, and a shallow spread would let the profile's
+            // client-safe wg block replace the whole thing — which is exactly the field
+            // (serverPrivateKey) the server config needs.
+            const kc = k.credentials;
+            creds = { ...kc, ...creds, wg: { ...(kc.wg ?? {}), ...(creds.wg ?? {}) } };
+          }
+          const how = creds.realityPrivateKey ? `full (private material from ${keysPath})` : `profile only — ${keysPath} not readable, so reality/wg listeners cannot be built`;
+          process.stdout.write(`  creds       ${how}\n`);
+        } catch {
+          process.stdout.write(`  creds       profile only (${keysPath} not readable — reality/wg listeners will fail to build)\n`);
+        }
+      }
       const node = profile.servers.find((s) => s.id === args.node) ?? profile.servers[0];
       const ladder = RUNGS.map((rung) => {
         const tuning = tuneFor({
@@ -218,7 +245,7 @@ async function main() {
           link: linkFrom(args),
           client: { platform: 'linux', mtu: 1420, capabilities: { kernelTls: true, graphicalClient: false } },
           server: { ...node, capabilities: node.capabilities },
-          creds: profile.credentials,
+          creds,
           policy: resolve(args.mode),
           notes: [],
         });
@@ -228,7 +255,7 @@ async function main() {
         profile,
         node,
         server: { ...node, tag: 'savak', creds: profile.credentials, profile, paths: { cert: '/var/lib/savak/tls.crt', key: '/var/lib/savak/tls.key', state: '/var/lib/savak' } },
-        creds: profile.credentials,
+        creds,
         policy: resolve(args.mode),
         ladder,
         options: { hostname: args.hostname, certificateProvider: !!args.acme, masqueradeUrl: args.masquerade, realityDest: node.realityDest, paths: { state: '/var/lib/savak' } },
@@ -355,7 +382,13 @@ async function main() {
         masquerade: args.masquerade ?? 'https://www.google.com',
         mode: args.mode ?? 'auto',
       });
-      const cfg = serverConfigFor(res.profile, res.profile.servers[0].id, { apiSecret: args.apiSecret ?? res.credentials.hy2Password.slice(0, 16), acmeEmail: args.email });
+      const cfg = serverConfigFor(res.profile, res.profile.servers[0].id, {
+    apiSecret: args.apiSecret ?? res.credentials.hy2Password.slice(0, 16),
+    acmeEmail: args.email,
+    // The full credential set: the *profile* is deliberately stripped of the node's private
+    // keys (it ships inside the APK), so the server config is built from what init generated.
+    creds: res.credentials,
+  });
       const v = await validateConfig(cfg);
       const { writeFile, mkdir } = await import('node:fs/promises');
       await mkdir(outDir, { recursive: true });
@@ -376,6 +409,38 @@ async function main() {
       if (!v.ok) process.exitCode = 4;
       break;
     }
+    case 'app-assets': {
+      const { emitAppAssets } = await import('./app-assets.js');
+      const res = await emitAppAssets({
+        androidDir: String(args.androidDir ?? 'android'),
+        hostname: String(args.hostname ?? 'demo.savak.example'),
+        nodeId: String(args.node ?? 'demo-1'),
+        user: args.user ? String(args.user) : undefined,
+        policy: policyFrom(args),
+        dryRun: !!args.dryRun,
+        force: !!args.force,
+        validate: !args.noValidate,
+      });
+      if (!res.ok) {
+        // The module owns the number; the CLI only forwards it. A caller that reads the exit code
+        // without parsing stdout (CI, a wrapper) must see the same verdict.
+        process.stdout.write(`app-assets: ${res.reason}\n`);
+        process.exitCode = res.code ?? 5;
+        break;
+      }
+      process.stdout.write(
+        `${res.dryRun ? 'would write' : 'wrote'} ${res.files.length} file(s) under ${args.androidDir ?? 'android'}\n` +
+        res.files.map((f) => `  ${f}\n`).join('') +
+        `  profile   ${res.profileId} · signed ed25519 keyId=${res.keyId}\n` +
+        `  bundle    ${res.nodes} node(s) × ${res.rungs} rung(s) · guard=${res.guard} · schema ${res.validated ? 'validated' : 'NOT validated'}\n` +
+        `  anchor    publicKeyB64=${res.publicKeyB64}\n` +
+        (res.replacedHandwritten ? '  ⚠ replaced a hand-written TrustedKeys.kt (force=true was passed)\n' : '') +
+        `  next      cd android && gradle :app:assembleDebug   # or the CI workflow, which does the same\n`,
+      );
+      if (res.credentialsHint) process.stdout.write(`  note      ${res.credentialsHint}\n`);
+      break;
+    }
+
     case 'serve': {
       const { serve } = await import('./web.js');
       await serve({ port: Number(args.port ?? 8080) });

@@ -64,7 +64,21 @@ gomobile bind -target=android -androidapi 26 -javapkg org.savak.core \
 
 ### ۳. کلیدهای مورد اعتماد برای امضای پروفایل
 
-خروجی `node src/cli.js init` یک `keys.json` می‌دهد که دو شکل از یک کلید دارد:
+کوتاه‌ترین راه درست، تولید هر سه فایل با هم است (پروفایل امضاشده + باندل + کلیدِ لنگر)، چون
+«کلیدِ اشتباه کنار پروفایلِ درست» دقیقاً همان ترکیبی است که دستی گرفتنِ آن خطا معمولاً بی‌صدا
+می‌ماند و روی گوشی به «امضا رد شد» تبدیل می‌شود:
+
+```bash
+node engine/src/cli.js app-assets --androidDir android --hostname node.example --mode daily
+```
+
+این دستور `app/src/main/assets/{profile,bundle}.json` و
+`app/src/main/java/ir/savak/client/security/TrustedKeys.kt` را می‌نویسد (فقط فایل خودش را — یک
+`TrustedKeys.kt` دستی را پاک نمی‌کند) و **هیچ کلید خصوصیِ سروری** داخل APK نمی‌گذارد:
+`realityPrivateKey` و `wg.serverPrivateKey` قبل از امضا از پروفایل حذف می‌شوند، چون `assets/`
+داخل APK یک zipِ قابل‌بازکردن است. `server.json` نود همان‌ها را از `keys.json` می‌گیرد.
+
+دستی: خروجی `node src/cli.js init` یک `keys.json` می‌دهد که دو شکل از یک کلید دارد:
 `publicKey` (PEM، برای خودِ نود) و `publicKeyB64` (DER فشرده، برای اپ). `keyId` و
 `publicKeyB64` را در `TrustedKeys.map` (پایین `MainActivity.kt`) بگذارید. اگر از روی اشتباه
 PEM را بچسبانید، `ProfileVerifier` خودش armor را برمی‌دارد — چون «کلید نامشروع» بودنِ یک
@@ -111,10 +125,13 @@ go.dev و dl.google.com در handshakeٔ TLS بسته‌اند)؛ این تنه�
 
 | | وضعیت |
 |---|---|
-| کامپایل شدن کد ماژول (۱۲ فایل: `engine/` `security/` `service/` + `MainActivity` + `BootReceiver`) | ✅ اجرا شده با `kotlinc` روی JVM، بدون Android SDK |
+| کامپایل شدن کد ماژول (۱۳ فایل: `engine/` `security/` `service/` + `MainActivity` + `BootReceiver`) | ✅ اجرا شده با `kotlinc` روی JVM، بدون Android SDK |
 | امتیازدهی و رتبه‌بندی پله‌ها روی ۱۰ سناریوی مسیر (۸۰ ردیف) | ✅ `LadderParityCheck` روی fixture تولیدشده از موتور، **اجرا شده** |
 | اینکه خودِ چک «می‌تواند fail شود» | ✅ `checkDetectsMutation` — یک عددِ عوض‌شده باید گزارش شود |
 | canonical JSON + Ed25519 روی پروفایل امضاشدهٔ `savak init` | ✅ تأیید شد؛ دست‌کاری آدرس، کلید ناشناخته و فهرست خالی → رد |
+| Kotlinِ تولیدشدهٔ `savak app-assets` (لنگر اعتماد) | ✅ همان فایلِ generated را جای استاب گذاشتیم و `typecheck.sh` سبز شد (exit 0) — یعنی خروجیِ ابزار کامپایل می‌شود، نه اینکه فقط JSON است |
+| اینکه پروفایلِ داخل assets با کلیدِ compile‌شده جور است | ✅ `engine/test/app-assets.test.js` (راندتریپ + ردِ همان پروفایل با لنگرِ حذف‌شده) |
+| نشت نکردن کلید خصوصیِ نود به APK | ✅ حذف قبل از امضا + سیم‌شکن روی نوشتن؛ با جهش‌دادنِ `clientSafeCredentials` تست می‌شکند |
 | هیسترزیس تعویض (dwell، حداقل سود، cooldown) | ✅ همان fixture، به‌علاوه `test/selector.test.js` در موتور |
 | اعتبارسنجی پیکربندی‌ها مقابل schema رسمی sing-box 1.14.4 | ✅ در موتور، هنگام build باندل |
 | `MainActivity.kt` (Compose) | ✅ **حالا کامپایل می‌شود** — با استاب‌های `androidx/*` در `tools/kotlinc-stubs/` و `kotlinx-coroutines-core-jvm.jar` کنار خودِ کامپایلر. همین پا یک باگ واقعی گرفت: `Bundle.minSwitchGainPct` با `optInt` به `Selector(minSwitchGainPct: Double)` پاس می‌شد («argument type mismatch: actual Int, expected Double»). مرز `libbox` (AAR) هنوز ❌ — اولین لینک واقعی‌اش در Gradle/CI است |

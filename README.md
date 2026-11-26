@@ -14,7 +14,8 @@ https://doo.st/1406
 |---|---|---|
 | سورس کامل (موتور + اپ + گره + مستند) | https://github.com/dmj74/savak-vpn/archive/refs/tags/v0.2.0-engine.tar.gz | ✅ آماده |
 | صفحهٔ Release (توضیح نسخه + فایل‌ها) | https://github.com/dmj74/savak-vpn/releases/tag/v0.2.0-engine | ✅ آماده |
-| **APK دیباگ** | بعد از یک‌بار فعال کردن pipeline: `cp ci/android-apk.yml .github/workflows/` | ⚙️ یک خط از شما |
+| **APK دیباگ** | بعد از یک‌بار فعال کردن pipeline: `cp ci/apk-only.yml .github/workflows/` (یا `ci/android-apk.yml` برای همهٔ چک‌ها) — اجرا روی `ubuntu-latest` با SDK+NDK+Go واقعی، و با `with_demo_bundle` پروفایل/باندل هم داخلش می‌نشیند | ⚙️ یک خط از شما |
+| **سه فایلی که APK را از «خالی» به «کار می‌کند» می‌رساند** | `node engine/src/cli.js app-assets --androidDir android --hostname <host> --mode daily` | ✅ اجرا و آزمون‌شده (۱۰۴ تست موتور) |
 | `bundle.json` گوشی | روی **گره خودتان**: `node src/cli.js bundle …` | ✅ عمداً آپلود نمی‌شود — کلیدهای گره داخلش است |
 | منطق اندروید + UI: کامپایل + هم‌ارزی + امضا (بدون SDK) | `bash android/tools/typecheck.sh` | ✅ همین‌جا اجرا شد — نه فقط نوشته |
 
@@ -29,7 +30,11 @@ Maven Central هم از آن شبکه مسدود بودند (چک شد: هر د�
 `workflows` ندارد و GitHub هر pushی را که فایل workflow بسازد رد می‌کند — که درست است.
 
 ```bash
-mkdir -p .github/workflows && cp ci/android-apk.yml .github/workflows/ && git push
+mkdir -p .github/workflows && cp ci/apk-only.yml .github/workflows/ && git push
+# یک اجرا از راه دور، بدون clone (با احراز هویت خودتان — اپ Arena روی .github/workflows/* مجاز نیست):
+gh api -X PUT repos/<owner>/<repo>/contents/.github/workflows/apk-only.yml \
+  -f message='ci: enable the debug-APK build' -f branch=main \
+  -f content="$(base64 -w0 ci/apk-only.yml)"
 ```
 
 و اگر می‌خواهید به‌جای CI روی دستگاه خودتان بسازید، همان «نصب همه‌چیز» اسکریپت است:
@@ -78,7 +83,7 @@ AnyTLS، Shadowsocks-2022، WireGuard، CDN-fronted VLESS، Tor) و همه در 
 | مسیر | چیست |
 |---|---|
 | `engine/` | موتور Node (بدون وابستگی جز `ajv`): مدل پروتکل، tuning، امتیازدهی، تولید config، پروب‌های واقعی، CLI، داشبورد |
-| `engine/test/` | ۹۵ تست: اعتبارسنجی config مقابل **schema رسمی sing-box 1.14.4**، رتبه‌بندی، tuning، پروب‌ها با سوکت واقعی، امضای پروفایل، پیوندهای اشتراک، CLI، داشبورد |
+| `engine/test/` | ۱۰۴ تست: حذف کلید خصوصیِ سرور از پروفایلِ داخل APK، هم‌ارزی Kotlin↔JS، اعتبارسنجی config مقابل **schema رسمی sing-box 1.14.4**، رتبه‌بندی، tuning، پروب‌ها با سوکت واقعی، امضای پروفایل، پیوندهای اشتراک، CLI، داشبورد |
 | `server/` | `bootstrap.sh` (نصب گره + sysctl + systemd)، `sysctl-savak.conf`، پاسخ‌دهندهٔ اندازه‌گیری |
 | `android/` | منبع Kotlin/Compose کلاینت (منطق انتخاب + امنیت پروفایل + TUN)، با جدول پله‌ای که **از موتور تولید می‌شود** |
 | `docs/` | ستیزگی با فیلترینگ · واقعیتِ سرعت · [کلید قطع، تونل شکافته، حالت روزمره، فید سرور](docs/tunnel-controls.md) · [منشأ APK](docs/apk-provenance.md) |

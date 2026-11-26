@@ -92,6 +92,33 @@ export function secret(bytes = 32) {
  * A fresh, complete credential set for one node — the piece bootstrap.sh needs before
  * it can write a config, and the piece people otherwise paste from a blog post.
  */
+/**
+ * Server-only secrets. A profile is shipped *inside the APK* (`assets/profile.json` is a plain
+ * file in a zip anyone can open), so anything in this list that rides along in a profile is
+ * published to every installer: with `realityPrivateKey` an attacker impersonates the node to
+ * all of its users, and `wg.serverPrivateKey` is the same for the WireGuard rung.
+ */
+export const SERVER_ONLY_CREDENTIALS = ['realityPrivateKey'];
+export const SERVER_ONLY_NESTED = { wg: ['serverPrivateKey'] };
+
+/** The profile's view of the credentials: what a *client* needs, and nothing else. */
+export function clientSafeCredentials(creds = {}) {
+  const { realityPrivateKey, wg, ...rest } = creds;
+  const safeWg = { ...(wg ?? {}) };
+  for (const k of SERVER_ONLY_NESTED.wg ?? []) delete safeWg[k];
+  return { ...rest, ...(wg ? { wg: safeWg } : {}) };
+}
+
+/** Every secret value a client document must never contain, for the write-time tripwire. */
+export function serverSecretValues(creds = {}) {
+  const out = [];
+  for (const k of SERVER_ONLY_CREDENTIALS) if (creds?.[k]) out.push(String(creds[k]));
+  for (const [ns, keys] of Object.entries(SERVER_ONLY_NESTED)) {
+    for (const k of keys) if (creds?.[ns]?.[k]) out.push(String(creds[ns][k]));
+  }
+  return out;
+}
+
 export function generateCredentials(overrides = {}) {
   const wg = wireGuardKeypair();
   const wgClient = wireGuardKeypair();

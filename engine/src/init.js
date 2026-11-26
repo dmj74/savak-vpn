@@ -7,7 +7,7 @@
  * freshly initialised node cannot produce a config the phone would reject.
  */
 
-import { generateCredentials, spkiPin, tlsKeypairForQuic } from './keys.js';
+import { generateCredentials, spkiPin, tlsKeypairForQuic, clientSafeCredentials } from './keys.js';
 import { exampleProfile, signProfile, generateSigningKey, profileId } from './profile.js';
 import { validateConfig } from './validate.js';
 import { clientConfig, serverConfig } from './singbox.js';
@@ -55,6 +55,13 @@ export function initProfile({
   mode = 'auto',
 } = {}) {
   const creds = generateCredentials(credentials);
+  // Two views of the same material, on purpose:
+  //   creds        → everything; goes to keys.json (0600, on the node) and into server.json
+  //   clientCreds  → the *client's* subset; goes into the signed profile
+  // The profile is shipped inside the APK — `assets/profile.json` is a file in a zip that
+  // anyone who installs the app can read. A Reality private key in there is not a leak of a
+  // secret *about* the node, it is the ability to impersonate the node to every user of it.
+  const clientCreds = clientSafeCredentials(creds);
   const key = signingKey ?? generateSigningKey();
   const all = RUNGS.map((r) => r.id).filter((id) => id !== 'tor_bridge' && id !== 'naive_h3' && id !== 'vless_ws_cdn' && id !== 'vmess_ws');
   const profile = signProfile(
@@ -62,7 +69,7 @@ export function initProfile({
       issuer: `savak@${hostname}`,
       user,
       policy: { mode, sniWhitelist: ['www.google.com', 'youtube.com'] },
-      credentials: creds,
+      credentials: clientCreds,
       servers: [
         {
           id: nodeId,
@@ -110,6 +117,14 @@ export function attachPinnedKey(profile, publicKeyPem) {
 /** Server config for the initialised node, with the ladder's own tuning applied. */
 export function serverConfigFor(profile, nodeId, options = {}) {
   const node = nodeView(profile, nodeId);
+  const creds = options.creds ?? profile.credentials ?? {};
+  const missing = ['realityPrivateKey'].filter((k) => !creds[k]);
+  if (missing.length) {
+    throw new Error(
+      `server config needs ${missing.join(', ')} and the profile no longer carries it (by design: the profile ships inside the APK). ` +
+      `Pass the node's keys.json (init writes it next to profile.json) — with savak: --keys <path/to/keys.json>.`,
+    );
+  }
   const link = synthesizeLink({ access: 'wifi' });
   const policy = resolvePolicy({ mode: profile.policy?.mode ?? 'auto' });
   const ladder = RUNGS.map((rung) => {
@@ -118,7 +133,7 @@ export function serverConfigFor(profile, nodeId, options = {}) {
       link,
       client: { platform: 'linux', mtu: options.mtu ?? 1420, tlsVersionAtLeast13: true, capabilities: { kernelTls: true, graphicalClient: false, packetInjection: false } },
       server: { ...node, capabilities: node.capabilities ?? {} },
-      creds: profile.credentials,
+      creds,
       policy,
       notes: [],
     });
@@ -128,7 +143,7 @@ export function serverConfigFor(profile, nodeId, options = {}) {
     profile,
     node,
     server: node,
-    creds: profile.credentials,
+    creds,
     policy,
     ladder,
     options: {

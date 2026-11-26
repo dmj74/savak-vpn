@@ -90,6 +90,12 @@ sha256 است. اگر شبکه بسته باشد، اسکریپت **چیزی ن�
 
 ## فایل APK: چه چیزی تأیید می‌شود، و چه چیزی رد
 
+نمونهٔ واقعیِ همین تفکیک در [`docs/apk-provenance.md`](../docs/apk-provenance.md) ثبت شده است:
+فایل ۱٫۱ مگابایتیِ متصل به لینک «دانلود مستقیم» پکیج `ir.titanali.app` است با یک مجوز `INTERNET`،
+بدون `lib/`، بدون `BIND_VPN_SERVICE` و بدون یک رشتهٔ VPN در dex — یعنی `verify_apk` آن را رد می‌کند
+و حق هم دارد.
+
+
 `install-toolchain.sh` بعد از بیلد فایل را با `verify_apk` می‌سنجد؛ اگر رد شود
 `savak-debug.apk` **پاک** می‌شود (exit 3) — نه با هشدار تحویل داده می‌شود. معیارش ساختاری است:
 `classes*.dex`، `AndroidManifest.xml`/`resources.arsc`، `lib/<abi>/*.so` **برای هر سه** `abiFilters`

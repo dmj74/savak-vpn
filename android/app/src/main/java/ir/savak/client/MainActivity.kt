@@ -401,7 +401,6 @@ class SavakViewModel(private val context: Context) {
         val rung = rungs.firstOrNull { it.id == rungId } ?: return
         val node = bundle?.nodes?.firstOrNull()
         BundleHolder.stage(rungs, guard = node?.guard, preferred = node?.preferredRung, profileLabel = bundle?.profileName)
-        BundleHolder.wantsTun = true
         if (SavakVpnService.running) {
             context.startService(
                 Intent(context, SavakVpnService::class.java)

@@ -266,7 +266,12 @@ object BundleHolder {
     @Volatile var mtu: Int = 1400
     @Volatile var useSubprocess: Boolean = false
     @Volatile var binary: String = "sing-box"
-    @Volatile var wantsTun: Boolean = true
+    /**
+     * Whether the *staged config* asks for a TUN. Derived, never assumed: the service uses it
+     * to decide whether "started but no interface" is a failure (it is, for a tun config) or a
+     * proxy-only run (legitimate, and it must not be reported as a tunnel).
+     */
+    @Volatile var wantsTun: Boolean = false
     /** `profile.user`, staged with the rungs: a tunnel is named after its profile. */
     @Volatile var profileLabel: String? = null
     @Volatile var preferredRung: String = ""
@@ -276,6 +281,11 @@ object BundleHolder {
     fun stage(rungs: List<Rung>, guard: String? = null, preferred: String? = null, profileLabel: String? = null) {
         this.profileLabel = profileLabel?.takeIf { it.isNotBlank() }
         byTag = rungs.associateBy { "savak-${it.id}" }
+        wantsTun = rungs.any { rung ->
+          val inbounds = rung.config.optJSONArray("inbounds")
+          inbounds != null && (0 until inbounds.length())
+            .any { i -> inbounds.getJSONObject(i).optString("type") == "tun" }
+        }
         pending = rungs.firstOrNull()
         guardText = guard
         preferredRung = preferred ?: pending?.id ?: ""

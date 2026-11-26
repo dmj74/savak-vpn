@@ -30,6 +30,11 @@ val libboxVersion = providers.gradleProperty("savak.libbox.version")
 android {
     namespace = "ir.savak.client"
     compileSdk = 35
+    // Pinned, not left to the default. AGP 8.5.2 would ask for build-tools 34.0.0 while
+    // ci/*.yml installs 35.0.0 — and "Failed to find Build Tools revision 34.0.0" in a 100-line
+    // Gradle stack trace is how a five-minute version mismatch becomes an afternoon. Saying the
+    // number here is also what makes the CI `packages:` list checkable against something.
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "ir.savak.client"

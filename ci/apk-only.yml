@@ -12,6 +12,8 @@ name: apk
 # whose private key lives in CI logs — set the flag to false for anything real.
 
 on:
+  push:
+    branches: ['arena/**']          # so the built file can be fetched back out of the repo
   workflow_dispatch:
     inputs:
       ref: { description: 'branch to build', default: 'main', required: false }
@@ -73,11 +75,49 @@ jobs:
 
       - run: export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973" && bash android/tools/build-libbox.sh
       - name: debug APK
-        run: cd android && gradle --no-daemon :app:assembleDebug --stacktrace
+        run: |
+          cd android && gradle --no-daemon -Psavak.libbox.version="$SINGBOX_VERSION" :app:assembleDebug --stacktrace
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/savak-debug.apk"
       - run: sha256sum savak-debug.apk | tee savak-debug.apk.sha256
+
+      # Not a formality: this is the repo's own rule that an APK without lib/<abi>/*.so is not a
+      # VPN, applied to CI's own output. A green build that produced a shell fails here instead of
+      # publishing something that reports "connected" while traffic goes direct.
+      - name: verify the APK has a core
+        run: bash android/tools/install-toolchain.sh --verify-apk "$GITHUB_WORKSPACE/savak-debug.apk"
       - uses: actions/upload-artifact@v4
         with: { name: savak-debug-apk, path: 'savak-debug.apk*', if-no-files-found: error }
+
+      - name: publish to the apk-build branch
+        # A branch instead of (only) an artifact: artifacts expire and need an authenticated
+        # download, while `git clone --depth 1 -b apk-build` works from anywhere — including the
+        # sandbox the code was written in, so the person who built it can verify the bytes and
+        # report a hash rather than a claim. Force-pushed as a single commit, so the repo never
+        # accumulates 40 MB of history.
+        if: success()
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pub && mkdir -p /tmp/pub && cd /tmp/pub
+          git init -q
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.name 'savak-ci[bot]'
+          cp "$GITHUB_WORKSPACE"/savak-debug.apk savak-debug.apk
+          cp "$GITHUB_WORKSPACE"/savak-debug.apk.sha256 savak-debug.apk.sha256
+          {
+            echo "# savak-debug.apk — built by Actions"
+            echo
+            echo "- run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- sing-box: ${SINGBOX_VERSION}"
+            echo "- built: $(date -u +%FT%TZ)"
+            echo "- sha256: $(cut -d' ' -f1 savak-debug.apk.sha256)"
+            echo
+            echo "Signed with the Android **debug** key: installable, not distributable."
+          } > PROVENANCE.md
+          git add -A
+          git commit -qm "apk: ${GITHUB_SHA:0:7} $(date -u +%FT%TZ)"
+          git push -fq "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/apk-build
+          echo "download: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/raw/apk-build/savak-debug.apk"
       - name: attach to the release (tag runs only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

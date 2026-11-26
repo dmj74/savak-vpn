@@ -10,6 +10,9 @@
 #   bash android/tools/install-toolchain.sh --install   # نصب، بدون بیلد
 #   bash android/tools/install-toolchain.sh docker     # راهنمای مسیر داکر (بدون نصب روی میزبان)
 #   bash android/tools/install-toolchain.sh --self-test  # آیا verify_sha واقعاً رد می‌کند؟
+#   bash android/tools/install-toolchain.sh --verify-apk فایلی.apk
+#        درِ خروجی: هر APK (ساختهٔ CI یا دستِ شما) باید هستهٔ تانل و باندل داشته باشد؛ اگر نداشت
+#        exit 3. CI هم همین را روی محصول خودش اجرا می‌کند (ci/apk-only.yml).
 # چه چیزی از این محیط قابل اجرا نبود و باید صادقانه گفته شود: مسیرهای دانلود (Gradle/SDK/Go)
 # اینجا مسدودند، پس سه تابع install_* روی شبکهٔ واقعی تست نشده‌اند — به‌ویژه آنجا که checksum
 # ابزارک‌های Android را از repository2-3.xml می‌خواند. چیزی که اینجا اجرا و تأیید شده خودِ

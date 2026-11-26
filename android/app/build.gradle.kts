@@ -16,6 +16,17 @@ plugins {
  */
 val signingPropsFile = rootProject.file("../server/release-signing.properties")
 
+/**
+ * One place for the core version. `tools/build-libbox.sh` installs the AAR at
+ * org/savak/core/libbox/<this version>/, and CI sets the same number via its SINGBOX_VERSION
+ * env — so a bump that reaches only one of the three silently builds an APK that *reports* one
+ * core while *linking* another. `buildConfigField` below reads the identical value, so the string
+ * shown in the app can no longer disagree with the artifact on the classpath.
+ */
+val libboxVersion = providers.gradleProperty("savak.libbox.version")
+    .orElse(providers.provider { System.getenv("SINGBOX_VERSION") })
+    .getOrElse("1.14.4")
+
 android {
     namespace = "ir.savak.client"
     compileSdk = 35
@@ -30,7 +41,7 @@ android {
             // The libbox AAR is a gomobile artifact: it carries cgo .so files for these ABIs.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
-        buildConfigField("String", "SINGBOX_VERSION", "\"1.14.4\"")
+        buildConfigField("String", "SINGBOX_VERSION", "\"" + libboxVersion + "\"")
         buildConfigField("boolean", "USE_SUBPROCESS_BACKEND", "false")
     }
 
@@ -114,7 +125,7 @@ dependencies {
     // build. Add them with a call site, not as scaffolding.
 
     // gomobile binding for sing-box 1.14.4 — built locally, see android/README.md.
-    implementation("org.savak.core:libbox:1.14.4")
+    implementation("org.savak.core:libbox:$libboxVersion")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // JSONObject in JVM unit tests

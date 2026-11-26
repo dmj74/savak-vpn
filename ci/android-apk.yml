@@ -73,7 +73,12 @@ jobs:
         run: |
           python3 -m pip install --user aapt2 || pip install --user aapt2
           chmod +x "$HOME"/.local/lib/python3*/site-packages/aapt2/bin/Linux/aapt2 || true
-      - name: compile the module, then parity + profile trust
+      # This step is also the only place MainActivity.kt is typechecked: the leg finds
+      # kotlinx-coroutines-core-jvm.jar inside the kotlin-compiler package it just installed
+      # (the compiler's own manifest lists it on Class-Path, so it is always beside the jar),
+      # and compiles the UI against the androidx stubs in android/tools/kotlinc-stubs/.
+      # If that jar ever stops shipping, the step prints a ⚠ skip line rather than going quiet.
+      - name: compile the module (+ the UI), then parity + profile trust
         run: |
           export KOTLIN_COMPILER_JAR="$(npm root -g)/kotlin-compiler/lib/kotlin-compiler.jar"
           test -f "$KOTLIN_COMPILER_JAR"
